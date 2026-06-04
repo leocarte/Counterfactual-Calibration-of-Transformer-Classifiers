@@ -1,0 +1,20 @@
+# Model D3 alternative: Mistral-7B-Instruct Guided Chain-of-Thought
+defaults:
+  - base
+
+experiment_name: "model_d3_mistral_guided_cot"
+
+llm:
+  model_name: "mistralai/Mistral-7B-Instruct-v0.3"
+  quantization: "4bit"
+  max_new_tokens: 300
+  temperature: 0.0
+  do_sample: false
+  prompt_template: "guided_cot"
+  use_vllm: false
+  batch_size: 4
+
+evaluation:
+  metrics: ["macro_f1", "precision", "recall", "pr_auc"]
+  per_keyword: true
+  eval_split: "test"

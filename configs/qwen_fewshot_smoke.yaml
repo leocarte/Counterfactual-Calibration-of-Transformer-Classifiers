@@ -1,0 +1,21 @@
+# SMOKE-TEST: Qwen-2.5-7B-Instruct few-shot — 20 samples only.
+defaults:
+  - base
+
+experiment_name: "smoke_d2_qwen_fewshot"
+
+llm:
+  model_name: "Qwen/Qwen2.5-7B-Instruct"
+  quantization: "4bit"
+  max_new_tokens: 50
+  temperature: 0.0
+  do_sample: false
+  prompt_template: "few_shot"
+  use_vllm: false
+  batch_size: 4
+  limit: 20
+
+evaluation:
+  metrics: ["macro_f1", "precision", "recall"]
+  per_keyword: false
+  eval_split: "test"

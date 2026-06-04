@@ -1,0 +1,32 @@
+# SMOKE-TEST: RoBERTa-base, 1 epoch, small batch — pipeline validation only.
+# Do NOT cite these metrics. For real run: use configs/roberta.yaml.
+defaults:
+  - base
+
+experiment_name: "smoke_a_roberta"
+
+model:
+  name: "roberta-base"
+  num_labels: 2
+  dropout: 0.1
+  freeze_embeddings: false
+
+training:
+  epochs: 1
+  batch_size: 4
+  learning_rate: 2.0e-5
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  max_grad_norm: 1.0
+  precision: "bf16"   # bf16 on Ampere+ (fp16 unscale fails on some Hub checkpoints)
+  gradient_accumulation_steps: 4   # effective batch 16, safe on 4GB GPU
+  loss_type: "weighted_ce"
+  class_weights: [1.0, 4.79]
+  patience: 1
+  metric_for_best_model: "macro_f1"
+  keyword_masking: false
+  keyword_mask_prob: 0.0
+
+evaluation:
+  metrics: ["macro_f1", "precision", "recall", "pr_auc", "ece"]
+  per_keyword: false   # skip per-keyword on smoke for speed

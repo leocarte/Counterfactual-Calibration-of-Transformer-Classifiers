@@ -1,0 +1,21 @@
+# Model D2 alternative: Qwen-2.5-7B-Instruct Few-Shot Prompting
+defaults:
+  - base
+
+experiment_name: "model_d2_qwen_fewshot"
+
+llm:
+  model_name: "Qwen/Qwen2.5-7B-Instruct"
+  quantization: "4bit"
+  max_new_tokens: 50
+  temperature: 0.0
+  do_sample: false
+  prompt_template: "few_shot"
+  num_examples: 5
+  use_vllm: false
+  batch_size: 8
+
+evaluation:
+  metrics: ["macro_f1", "precision", "recall", "pr_auc"]
+  per_keyword: true
+  eval_split: "test"

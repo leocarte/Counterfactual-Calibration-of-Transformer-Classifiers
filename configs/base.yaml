@@ -1,0 +1,44 @@
+# Shared configuration for all experiments
+seed: 42
+project_name: "antisemitism-detection"
+
+paths:
+  raw_data: "data/raw/GoldStandard2024.csv"
+  processed_dir: "data/processed"
+  results_dir: "results"
+  checkpoints_dir: "results/checkpoints"
+  predictions_dir: "results/predictions"
+  metrics_dir: "results/metrics"
+  figures_dir: "results/figures"
+
+data:
+  text_column: "Text"
+  label_column: "Biased"
+  keyword_column: "Keyword"
+  id_column: "ID"
+  train_ratio: 0.8
+  dev_ratio: 0.1
+  test_ratio: 0.1
+  max_length: 128
+  # Keywords to use for masking augmentation
+  keywords:
+    - "jews"
+    - "jewish"
+    - "israel"
+    - "israeli"
+    - "zionazi"
+    - "zionist"
+    - "kike"
+    - "kikes"
+
+preprocessing:
+  mask_usernames: true
+  remove_urls: true
+  remove_hashtag_symbol: true  # keep hashtag text
+  preserve_emojis: true
+  lowercase: false  # preserve casing information
+
+wandb:
+  project: "ee559-antisemitism"
+  entity: null  # set to your wandb username
+  log_model: false

@@ -1,0 +1,48 @@
+# CCI v2 — fixed T (=1.0) + JS divergence + DeBERTa-v3-LARGE backbone
+# Multi-architecture robustness check vs the base (184M) pivot.
+defaults:
+  - base
+
+experiment_name: "cci_v2_fixed_js_deberta_v3_large"
+
+model:
+  name: "microsoft/deberta-v3-large"
+  num_labels: 2
+  dropout: 0.1
+  freeze_embeddings: false
+
+training:
+  epochs: 7
+  batch_size: 4                  # halve from base (large model = ~2.4x VRAM)
+  learning_rate: 1.0e-5          # standard: lower LR for large pretrained
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  max_grad_norm: 1.0
+  precision: "fp32"              # DeBERTa-v3 disentangled attention overflows in bf16/fp16
+  gradient_accumulation_steps: 4 # effective batch = 4 * 4 = 16 (same as base)
+
+  loss_type: "focal"
+  focal_gamma: 2.0
+  focal_alpha: 0.75
+
+  lambda_cci: 1.0
+  cci_temperature_learnable: false
+  cci_divergence: "js"
+  cci_init_T: 1.0
+  cci_T_min: 0.5
+  cci_T_max: 5.0
+  cci_positive_class_index: 1
+
+  cf_swaps_per_token: 3
+  cf_pairs_cap_per_example: 5
+  cf_symmetry_filter: "heuristic"
+
+  patience: 3
+  metric_for_best_model: "macro_f1"
+
+  keyword_masking: false
+  keyword_mask_prob: 0.0
+
+evaluation:
+  metrics: ["macro_f1", "precision", "recall", "pr_auc", "ece"]
+  per_keyword: true

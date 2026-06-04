@@ -1,0 +1,21 @@
+# SMOKE-TEST: Qwen-2.5-7B-Instruct Guided-CoT — 20 samples only.
+defaults:
+  - base
+
+experiment_name: "smoke_d3_qwen_guided_cot"
+
+llm:
+  model_name: "Qwen/Qwen2.5-7B-Instruct"
+  quantization: "4bit"
+  max_new_tokens: 300
+  temperature: 0.0
+  do_sample: false
+  prompt_template: "guided_cot"
+  use_vllm: false
+  batch_size: 2
+  limit: 20
+
+evaluation:
+  metrics: ["macro_f1", "precision", "recall"]
+  per_keyword: false
+  eval_split: "test"

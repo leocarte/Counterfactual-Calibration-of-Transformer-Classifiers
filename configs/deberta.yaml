@@ -1,0 +1,31 @@
+# Model B: DeBERTa-v3-base fine-tuning
+defaults:
+  - base
+
+experiment_name: "model_b_deberta_v3_base"
+
+model:
+  name: "microsoft/deberta-v3-base"
+  num_labels: 2
+  dropout: 0.1
+  freeze_embeddings: false
+
+training:
+  epochs: 5
+  batch_size: 8
+  learning_rate: 2.0e-5
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  max_grad_norm: 1.0
+  precision: "fp32"   # DeBERTa-v3 disentangled attention overflows in bf16/fp16 (NaN); fp32 is standard for DeBERTa-v3
+  gradient_accumulation_steps: 2  # effective batch size = 8 * 2 = 16
+  loss_type: "weighted_ce"
+  class_weights: [1.0, 4.79]
+  patience: 3
+  metric_for_best_model: "macro_f1"
+  keyword_masking: false
+  keyword_mask_prob: 0.0
+
+evaluation:
+  metrics: ["macro_f1", "precision", "recall", "pr_auc", "ece"]
+  per_keyword: true

@@ -1,0 +1,36 @@
+# Model C (focal + identity-mask) + RoBERTa-LARGE backbone
+# Cross-family baseline parallel to model_c_deberta_focal_mask.yaml.
+defaults:
+  - base
+
+experiment_name: "model_c_roberta_large"
+
+model:
+  name: "roberta-large"
+  num_labels: 2
+  dropout: 0.1
+  freeze_embeddings: false
+
+training:
+  epochs: 7
+  batch_size: 4
+  learning_rate: 1.0e-5
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  max_grad_norm: 1.0
+  precision: "fp32"              # M2 fix: bf16+focal has underflow on (1-p_t)**gamma at p_t>0.992
+  gradient_accumulation_steps: 4
+
+  loss_type: "focal"
+  focal_gamma: 2.0
+  focal_alpha: 0.75
+
+  patience: 3
+  metric_for_best_model: "macro_f1"
+
+  keyword_masking: true
+  keyword_mask_prob: 0.3
+
+evaluation:
+  metrics: ["macro_f1", "precision", "recall", "pr_auc", "ece"]
+  per_keyword: true

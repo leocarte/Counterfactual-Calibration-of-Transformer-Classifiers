@@ -1,0 +1,23 @@
+# SMOKE-TEST: Llama zero-shot — 20 samples only. Requires ~5GB VRAM.
+# Run on RCP (A100-80G node pool), NOT on 4GB laptop GPU.
+# For real run: use configs/llm_zeroshot.yaml (full 1060 test samples).
+defaults:
+  - base
+
+experiment_name: "smoke_d1_llm_zeroshot"
+
+llm:
+  model_name: "meta-llama/Llama-3.1-8B-Instruct"
+  quantization: "4bit"
+  max_new_tokens: 50
+  temperature: 0.0
+  do_sample: false
+  prompt_template: "zero_shot"
+  use_vllm: false
+  batch_size: 4
+  limit: 20   # smoke only — limit test samples
+
+evaluation:
+  metrics: ["macro_f1", "precision", "recall"]
+  per_keyword: false
+  eval_split: "test"

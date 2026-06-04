@@ -1,0 +1,46 @@
+# Calibration bake-off — Strategy 6/5: Stochastic Weight Averaging
+# (Izmailov et al., UAI 2018). Snapshots every epoch, averages the LAST K=3
+# epochs at the end of training. Score for early stopping stays F1; SWA
+# averaging happens at finalize. Memory cost: ~K * sizeof(model) on CPU.
+#
+# (Listed as 6/5 because the bake-off is a 5-way comparison reported in the
+# paper; SWA is the final entry alongside vanilla F1, three composite alphas,
+# and Temperature Scaling.)
+defaults:
+  - base
+
+experiment_name: "calib_SWA_deberta_focal_mask"
+
+model:
+  name: "microsoft/deberta-v3-base"
+  num_labels: 2
+  dropout: 0.1
+  freeze_embeddings: false
+
+training:
+  epochs: 7
+  batch_size: 8
+  learning_rate: 2.0e-5
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  max_grad_norm: 1.0
+  precision: "fp32"
+  gradient_accumulation_steps: 2
+
+  loss_type: "focal"
+  focal_gamma: 2.0
+  focal_alpha: 0.75
+
+  patience: 3
+
+  keyword_masking: true
+  keyword_mask_prob: 0.3
+
+  checkpoint_strategy:
+    name: "swa"
+    k: 3
+    base_metric: "macro_f1"
+
+evaluation:
+  metrics: ["macro_f1", "precision", "recall", "pr_auc", "ece", "brier_score", "nll"]
+  per_keyword: true

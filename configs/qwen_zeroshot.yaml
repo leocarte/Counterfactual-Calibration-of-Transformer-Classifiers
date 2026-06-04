@@ -1,0 +1,20 @@
+# Model D1 alternative: Qwen-2.5-7B-Instruct Zero-Shot Prompting
+defaults:
+  - base
+
+experiment_name: "model_d1_qwen_zeroshot"
+
+llm:
+  model_name: "Qwen/Qwen2.5-7B-Instruct"
+  quantization: "4bit"
+  max_new_tokens: 50
+  temperature: 0.0
+  do_sample: false
+  prompt_template: "zero_shot"
+  use_vllm: false
+  batch_size: 8
+
+evaluation:
+  metrics: ["macro_f1", "precision", "recall", "pr_auc"]
+  per_keyword: true
+  eval_split: "test"

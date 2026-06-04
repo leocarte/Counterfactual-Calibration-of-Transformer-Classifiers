@@ -1,0 +1,22 @@
+# SMOKE-TEST: Llama Guided-CoT — 20 samples only. Requires ~5GB VRAM.
+# Run on RCP (A100-80G node pool), NOT on 4GB laptop GPU.
+defaults:
+  - base
+
+experiment_name: "smoke_d3_llm_guided_cot"
+
+llm:
+  model_name: "meta-llama/Llama-3.1-8B-Instruct"
+  quantization: "4bit"
+  max_new_tokens: 300
+  temperature: 0.0
+  do_sample: false
+  prompt_template: "guided_cot"
+  use_vllm: false
+  batch_size: 2
+  limit: 20
+
+evaluation:
+  metrics: ["macro_f1", "precision", "recall"]
+  per_keyword: false
+  eval_split: "test"

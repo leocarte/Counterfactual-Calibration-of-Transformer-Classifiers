@@ -1,0 +1,39 @@
+# Calibration bake-off — Strategy 3/5: composite F1 - alpha*ECE, alpha=1.0.
+defaults:
+  - base
+
+experiment_name: "calib_composite_a10_deberta_focal_mask"
+
+model:
+  name: "microsoft/deberta-v3-base"
+  num_labels: 2
+  dropout: 0.1
+  freeze_embeddings: false
+
+training:
+  epochs: 7
+  batch_size: 8
+  learning_rate: 2.0e-5
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  max_grad_norm: 1.0
+  precision: "fp32"
+  gradient_accumulation_steps: 2
+
+  loss_type: "focal"
+  focal_gamma: 2.0
+  focal_alpha: 0.75
+
+  patience: 3
+
+  keyword_masking: true
+  keyword_mask_prob: 0.3
+
+  checkpoint_strategy:
+    name: "composite_f1_ece"
+    alpha: 1.0
+    base_metric: "macro_f1"
+
+evaluation:
+  metrics: ["macro_f1", "precision", "recall", "pr_auc", "ece", "brier_score", "nll"]
+  per_keyword: true

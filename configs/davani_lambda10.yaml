@@ -1,0 +1,45 @@
+# Davani CLP, central lambda=1.0, heuristic symmetry filter.
+defaults:
+  - base
+
+experiment_name: "davani_lambda10"
+
+model:
+  name: "microsoft/deberta-v3-base"
+  num_labels: 2
+  dropout: 0.1
+  freeze_embeddings: false
+
+training:
+  epochs: 7
+  batch_size: 8
+  learning_rate: 2.0e-5
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  max_grad_norm: 1.0
+  precision: "fp32"   # DeBERTa-v3 disentangled attention overflows in fp16/bf16
+  gradient_accumulation_steps: 2
+
+  # Focal loss base (matches Model C)
+  loss_type: "focal"
+  focal_gamma: 2.0
+  focal_alpha: 0.75
+
+  # Counterfactual Logit Pairing
+  lambda_clp: 1.0
+  clp_divergence: "l1"
+  clp_positive_class_index: 1
+  cf_swaps_per_token: 3
+  cf_pairs_cap_per_example: 5
+  cf_symmetry_filter: "heuristic"
+
+  patience: 3
+  metric_for_best_model: "macro_f1"
+
+  # Keyword masking turned OFF — CLP is a different mechanism for the same goal
+  keyword_masking: false
+  keyword_mask_prob: 0.0
+
+evaluation:
+  metrics: ["macro_f1", "precision", "recall", "pr_auc", "ece"]
+  per_keyword: true

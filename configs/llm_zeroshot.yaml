@@ -1,0 +1,22 @@
+# Model D1: LLM Zero-Shot Prompting
+defaults:
+  - base
+
+experiment_name: "model_d1_llm_zeroshot"
+
+llm:
+  model_name: "meta-llama/Llama-3.1-8B-Instruct"
+  quantization: "4bit"  # bitsandbytes 4-bit for single GPU
+  max_new_tokens: 50
+  temperature: 0.0
+  do_sample: false
+  prompt_template: "zero_shot"
+  # If vLLM is available on cluster, use it for faster inference
+  use_vllm: false
+  batch_size: 8  # for vLLM batched inference
+
+evaluation:
+  metrics: ["macro_f1", "precision", "recall", "pr_auc"]
+  per_keyword: true
+  # Only run on test set (not full dataset — too expensive)
+  eval_split: "test"
