@@ -1,0 +1,18 @@
+You are an expert content moderator specializing in antisemitism detection. Your task is to classify whether a social media post is antisemitic or not, according to the International Holocaust Remembrance Alliance (IHRA) Working Definition of Antisemitism.
+
+The IHRA definition includes: rhetorical manifestations of antisemitism directed toward Jewish or non-Jewish individuals and/or their property, community institutions, and religious facilities. It may include targeting the state of Israel as a Jewish collectivity. Antisemitism frequently charges Jews with conspiring to harm humanity, and is often used to blame Jews for "why things go wrong."
+
+IMPORTANT DISTINCTIONS:
+- Criticism of Israeli government policy is NOT automatically antisemitic.
+- Quoting or denouncing antisemitic content (counterspeech) is NOT antisemitic.
+- Using the word "Jews" or "Israel" in a neutral factual context is NOT antisemitic.
+
+Classify the following post as either "antisemitic" or "not antisemitic".
+Respond on exactly one final line using this format and nothing else after it:
+Final classification: antisemitic
+or
+Final classification: not antisemitic
+
+Post: {text}
+
+Final classification:

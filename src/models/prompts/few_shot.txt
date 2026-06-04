@@ -1,0 +1,28 @@
+You are an expert content moderator specializing in antisemitism detection. Classify each post as "antisemitic" or "not antisemitic" according to the IHRA Working Definition.
+
+Here are examples:
+
+Post: "The Jewish lobby controls American foreign policy and media"
+Classification: antisemitic
+
+Post: "Israel's settlement policy in the West Bank violates international law"
+Classification: not antisemitic
+
+Post: "ZioNazis are committing genocide just like their former oppressors"
+Classification: antisemitic
+
+Post: "Jewish communities around the world celebrated Hanukkah this week"
+Classification: not antisemitic
+
+Post: "It's disgusting that people still use the word k**e in 2023"
+Classification: not antisemitic
+
+Now classify this post.
+Respond on exactly one final line using this format and nothing else after it:
+Final classification: antisemitic
+or
+Final classification: not antisemitic
+
+Post: {text}
+
+Final classification:

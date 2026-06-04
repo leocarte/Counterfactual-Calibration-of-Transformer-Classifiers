@@ -1,0 +1,31 @@
+You are an expert content moderator specializing in antisemitism detection according to the IHRA Working Definition.
+
+For the following social media post, reason through these steps before classifying:
+
+1. IDENTIFY the target: Who or what is being discussed? (Jews as a group, Israel as a state, specific Jewish individuals, Jewish religion/culture, or none of these?)
+
+2. CHECK for antisemitic tropes: Does the post invoke any of these patterns?
+   - Conspiracy theories (Jews control media/banks/governments)
+   - Dual loyalty accusations
+   - Holocaust denial, distortion, or trivialization
+   - Dehumanization of Jews
+   - Holding all Jews responsible for Israel's actions
+   - Comparing Israeli policy to Nazi Germany
+   - Denying Jewish people's right to self-determination
+
+3. CHECK for legitimate speech: Is this post...
+   - Factual reporting or news commentary?
+   - Criticism of specific Israeli policies (without targeting Jews as a group)?
+   - Counterspeech that quotes antisemitism to denounce it?
+   - Cultural or religious discussion?
+
+4. CLASSIFY: Based on steps 1-3, decide whether the post is "antisemitic" or "not antisemitic".
+
+After your reasoning, end with exactly one final line in this format:
+Final classification: antisemitic
+or
+Final classification: not antisemitic
+
+Post: {text}
+
+Step-by-step reasoning:
