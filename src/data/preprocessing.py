@@ -1,14 +1,15 @@
-"""Text preprocessing for tweets."""
+"""Text preprocessing for tweets used throughout CCI v2."""
+from __future__ import annotations
+
 import re
-from typing import List
 
 
-# Keywords that may be masked during training (Model C)
-ANTISEMITISM_KEYWORDS = [
+# Keywords that may be masked during training (Model C).
+ANTISEMITISM_KEYWORDS: tuple[str, ...] = (
     "jews", "jewish", "jew", "israel", "israeli", "israelis",
     "zionazi", "zionazis", "zionist", "zionists", "zionism",
     "kike", "kikes",
-]
+)
 
 
 def preprocess_tweet(
@@ -19,16 +20,31 @@ def preprocess_tweet(
     preserve_emojis: bool = True,
     lowercase: bool = False,
 ) -> str:
-    """
-    Clean a tweet for model input.
+    """Clean a tweet for model input.
 
-    Design choices:
-    - Usernames → @USER (privacy + reduces vocabulary)
-    - URLs → [URL] (not informative for classification)
-    - Hashtag # removed but text kept (e.g., #FreePalestine → FreePalestine)
-    - Casing preserved (ALL CAPS carries emphasis signal)
-    - Emojis preserved (carry sentiment/intent)
-    - Retweet markers (RT) preserved (may indicate counterspeech/quoting)
+    Parameters
+    ----------
+    text : str
+        Raw tweet text.
+    mask_usernames : bool, default True
+        Replace ``@handle`` occurrences with ``@USER`` for privacy and
+        vocabulary reduction.
+    remove_urls : bool, default True
+        Replace ``http(s)://...`` and ``www.\\S+`` with ``[URL]``.
+    remove_hashtag_symbol : bool, default True
+        Strip the leading ``#`` from hashtags while keeping the body text
+        (e.g. ``#FreePalestine`` → ``FreePalestine``).
+    preserve_emojis : bool, default True
+        Reserved for future emoji-specific handling; currently a no-op
+        because emojis are preserved by default.
+    lowercase : bool, default False
+        Lowercase the result. Disabled by default so that
+        ALL-CAPS emphasis carries through to the model.
+
+    Returns
+    -------
+    str
+        Preprocessed text. Returns ``""`` for non-string inputs.
     """
     if not isinstance(text, str):
         return ""
@@ -56,12 +72,31 @@ def preprocess_tweet(
     return text
 
 
-def mask_keywords(text: str, keywords: List[str] = None, mask_token: str = "[MASK]") -> str:
-    """
-    Replace antisemitism-related keywords with mask token.
-    Used as training augmentation for Model C to prevent keyword shortcuts.
+def mask_keywords(
+    text: str,
+    keywords: list[str] | tuple[str, ...] | None = None,
+    mask_token: str = "[MASK]",
+) -> str:
+    """Replace identity keywords with ``mask_token`` at word boundaries.
 
-    Applied at the word level to preserve surrounding context.
+    Used as a training augmentation for Model C to suppress the keyword
+    shortcut documented by Dixon et al. (2018). Replacement is applied
+    case-insensitively but only at full-word matches, so surrounding
+    context is preserved.
+
+    Parameters
+    ----------
+    text : str
+        Input text.
+    keywords : sequence of str or None, default None
+        Tokens to mask. ``None`` uses :data:`ANTISEMITISM_KEYWORDS`.
+    mask_token : str, default ``"[MASK]"``
+        Replacement string.
+
+    Returns
+    -------
+    str
+        Masked text.
     """
     if keywords is None:
         keywords = ANTISEMITISM_KEYWORDS

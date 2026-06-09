@@ -1,4 +1,4 @@
-# Calibration bake-off — Strategy 2/5: composite F1 - alpha*ECE, alpha=0.5.
+# Calibration bake-off — Strategy 2/6: composite F1 - alpha*ECE, alpha=0.5.
 # Linear scalarisation of the F1/calibration Pareto frontier (small penalty).
 defaults:
   - base

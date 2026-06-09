@@ -1,4 +1,4 @@
-# Calibration bake-off — Strategy 4/5: composite F1 - alpha*ECE, alpha=2.0.
+# Calibration bake-off — Strategy 4/6: composite F1 - alpha*ECE, alpha=2.0.
 # Heavy penalty: prefers checkpoints where ECE has already settled, even at
 # small cost to F1.
 defaults:

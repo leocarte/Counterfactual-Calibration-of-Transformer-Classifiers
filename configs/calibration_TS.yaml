@@ -1,4 +1,4 @@
-# Calibration bake-off — Strategy 5/5: post-hoc Temperature Scaling
+# Calibration bake-off — Strategy 5/6: post-hoc Temperature Scaling
 # (Guo et al., ICML 2017). Vanilla F1 early stopping during training; a
 # scalar T is fitted on dev (L-BFGS, max 200 iter) by minimising NLL after
 # the best checkpoint is loaded. Test-time logits are divided by T before

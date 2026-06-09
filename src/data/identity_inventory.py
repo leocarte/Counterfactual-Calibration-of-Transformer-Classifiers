@@ -73,8 +73,8 @@ ALTERNATIVE_GROUPS: dict[str, tuple[str, ...]] = {
 
 # For swap construction: each Jewish religious-ethnic token maps to a parallel
 # token in each alternative group (singular noun, plural noun, adjective).
-# Grammatical number/role is approximate — the LLM filter (Yasmin's vertical)
-# will reject any swap that produces an ungrammatical sentence.
+# Grammatical number/role is approximate; the symmetry filter rejects
+# swaps that are not label-preserving.
 JEWISH_TO_ALTERNATIVE_TOKEN: dict[str, dict[str, str]] = {
     # singular noun / person
     "jew":    {"muslim": "muslim",    "christian": "christian", "hindu": "hindu",   "buddhist": "buddhist", "atheist": "atheist"},
@@ -244,17 +244,6 @@ def find_implicit_conspiracy_phrases(text: str) -> list[tuple[int, int, str]]:
     return results
 
 
-# Public, frozen exports for inspection in notebooks/tests.
-RELIGIOUS_ETHNIC_TOKENS: frozenset[str] = frozenset(_RELIGIOUS_ETHNIC_JEWISH)
-GEOPOLITICAL_PROXY_TOKENS: frozenset[str] = frozenset(_GEOPOLITICAL_PROXY_JEWISH)
-SLUR_TOKENS: frozenset[str] = frozenset(_SLURS_JEWISH)
-IMPLICIT_CONSPIRACY_TOKENS: frozenset[str] = frozenset(_IMPLICIT_CONSPIRACY_JEWISH)
-ALL_JEWISH_IDENTITY_TOKENS: frozenset[str] = frozenset(
-    RELIGIOUS_ETHNIC_TOKENS
-    | GEOPOLITICAL_PROXY_TOKENS
-    | SLUR_TOKENS
-    | IMPLICIT_CONSPIRACY_TOKENS
-)
 ALTERNATIVE_GROUP_NAMES: tuple[str, ...] = tuple(ALTERNATIVE_GROUPS.keys())
 
 # CCI v2 group label → integer index mapping. Used by TemperatureHead.

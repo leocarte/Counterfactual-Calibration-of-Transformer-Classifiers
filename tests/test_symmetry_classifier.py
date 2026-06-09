@@ -3,7 +3,6 @@ import pytest
 
 from src.data.symmetry_classifier import (
     HeuristicSymmetryClassifier,
-    LLMSymmetryClassifier,
     SymmetryDecision,
 )
 
@@ -65,58 +64,6 @@ class TestHeuristicSymmetryClassifier:
         )
         assert decision.is_symmetric is False
         assert "rule_4" in decision.reason
-
-
-class _MockLLMBackend:
-    """Test double for LLMSymmetryClassifier."""
-
-    def __init__(self, log_p_x: float, log_p_swap: float, label_preserved: bool):
-        self.log_p_x = log_p_x
-        self.log_p_swap = log_p_swap
-        self.label_preserved = label_preserved
-
-    def score_log_likelihood(self, text: str) -> float:
-        # Crude switch — first call returns x, second returns swap.
-        if not hasattr(self, "_call_count"):
-            self._call_count = 0
-        self._call_count += 1
-        return self.log_p_x if self._call_count == 1 else self.log_p_swap
-
-    def judges_label_preserved(self, x: str, x_swap: str) -> bool:
-        return self.label_preserved
-
-
-class TestLLMSymmetryClassifier:
-    def test_no_backend_falls_back_to_heuristic(self):
-        clf = LLMSymmetryClassifier(llm_backend=None)
-        decision = clf.decide(
-            "I respect Jewish people",
-            "I respect Muslim people",
-            ("Jewish", "Muslim"),
-        )
-        assert decision.is_symmetric is True
-        assert "fallback" in decision.reason
-
-    def test_likelihood_too_different_rejected(self):
-        backend = _MockLLMBackend(log_p_x=-2.0, log_p_swap=-10.0, label_preserved=True)
-        clf = LLMSymmetryClassifier(llm_backend=backend, log_likelihood_threshold=1.5)
-        decision = clf.decide("a", "b", ("a", "b"))
-        assert decision.is_symmetric is False
-        assert "implausible" in decision.reason
-
-    def test_label_flip_rejected(self):
-        backend = _MockLLMBackend(log_p_x=-2.0, log_p_swap=-2.5, label_preserved=False)
-        clf = LLMSymmetryClassifier(llm_backend=backend, log_likelihood_threshold=1.5)
-        decision = clf.decide("a", "b", ("a", "b"))
-        assert decision.is_symmetric is False
-        assert "label_flip" in decision.reason
-
-    def test_likelihood_and_label_pass(self):
-        backend = _MockLLMBackend(log_p_x=-2.0, log_p_swap=-2.5, label_preserved=True)
-        clf = LLMSymmetryClassifier(llm_backend=backend, log_likelihood_threshold=1.5)
-        decision = clf.decide("a", "b", ("a", "b"))
-        assert decision.is_symmetric is True
-        assert "pass" in decision.reason
 
 
 class TestSymmetryDecision:

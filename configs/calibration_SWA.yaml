@@ -1,4 +1,4 @@
-# Calibration bake-off — Strategy 6/5: Stochastic Weight Averaging
+# Calibration bake-off — Strategy 6/6: Stochastic Weight Averaging
 # (Izmailov et al., UAI 2018). Snapshots every epoch, averages the LAST K=3
 # epochs at the end of training. Score for early stopping stays F1; SWA
 # averaging happens at finalize. Memory cost: ~K * sizeof(model) on CPU.

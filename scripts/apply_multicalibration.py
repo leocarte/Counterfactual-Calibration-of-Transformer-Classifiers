@@ -223,7 +223,7 @@ def main():
     with open(output_dir / "calibrator_state.json", "w") as f:
         json.dump(calibrator.export_state(), f, indent=2, default=str)
 
-    # Calibrated test predictions for downstream analysis (Leonardo's bias audit)
+    # Calibrated test predictions for downstream analysis (bias audit)
     pred_df = pd.DataFrame({
         "text": test_texts,
         "true_label": test_y,

@@ -5,22 +5,13 @@ sense only when ``y(x) = y(x_swap)``. For asymmetric swaps (e.g. swapping a slur
 out, or swapping a geopolitical proxy across religions where no parallel exists),
 the swap implicitly changes the label and the CLP penalty destroys real signal.
 
-Two implementations are provided:
-
-  * :class:`HeuristicSymmetryClassifier` — token-rule based, no model dependency.
-    Ships immediately, used for Phase 1 Davani runs.
-  * :class:`LLMSymmetryClassifier` — language-model likelihood scoring of
-    ``P(x_swap | swap_template)`` vs ``P(x | swap_template)``. Plumbed in by
-    Yasmin's vertical once the LLM backend is online.
-
-Both expose the same :class:`SymmetryClassifier` interface so the CLP pipeline
-is LLM-agnostic.
+The default implementation, :class:`HeuristicSymmetryClassifier`, applies a
+token-rule decision tree (R1–R4 in the paper) and has no model dependency.
 """
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional
 
 from src.data.identity_inventory import (
     IdentityCategory,
@@ -58,11 +49,6 @@ class SymmetryClassifier(ABC):
             (original_token, swap_token) actually substituted.
         """
         ...
-
-    def is_symmetric(self, x: str, x_swap: str, swap_pair: tuple[str, str]) -> bool:
-        """Convenience boolean accessor."""
-        return self.decide(x, x_swap, swap_pair).is_symmetric
-
 
 class HeuristicSymmetryClassifier(SymmetryClassifier):
     """Token-rule symmetry classifier — Phase 1 default, no LLM dependency.
@@ -124,64 +110,3 @@ class HeuristicSymmetryClassifier(SymmetryClassifier):
         # Rule 4: conservative fallthrough — implicit/conspiracy markers
         # without religious-ethnic token are rare and ambiguous. Reject.
         return SymmetryDecision(False, "rule_4_conservative_default")
-
-
-class LLMSymmetryClassifier(SymmetryClassifier):
-    """Symmetry classifier driven by language-model likelihood scoring.
-
-    Plumbed in by Yasmin's vertical once the LLM backend (Mistral-7B-Instruct
-    or, post-gate, Llama-3.1-8B-Instruct) is reachable from the training pod.
-
-    The decision criterion is two-step:
-
-      1. **Likelihood plausibility** — compute ``log P(x_swap)`` and ``log P(x)``
-         under the LLM. If ``|log P(x) - log P(x_swap)| > threshold``, the swap
-         produces an ungrammatical / implausible sentence (e.g. an "Israel"
-         token replaced by "Egypt" in a religious context). Reject.
-      2. **Label-preserving judgment** — prompt the LLM with the original and
-         swapped tweets and ask whether the antisemitism label should remain
-         unchanged. Reject if the LLM signals a label flip.
-
-    v1 ships as a stub that defers to a heuristic fallback whenever the LLM
-    backend is not configured. This keeps Phase 1 unblocked.
-    """
-
-    def __init__(
-        self,
-        llm_backend: Optional[object] = None,
-        log_likelihood_threshold: float = 1.5,
-        fallback: Optional[SymmetryClassifier] = None,
-    ):
-        self.llm_backend = llm_backend
-        self.log_likelihood_threshold = log_likelihood_threshold
-        self.fallback = fallback or HeuristicSymmetryClassifier()
-
-    def decide(
-        self,
-        x: str,
-        x_swap: str,
-        swap_pair: tuple[str, str],
-    ) -> SymmetryDecision:
-        if self.llm_backend is None:
-            decision = self.fallback.decide(x, x_swap, swap_pair)
-            return SymmetryDecision(
-                decision.is_symmetric,
-                f"llm_backend_unset_fallback_{decision.reason}",
-            )
-
-        # Step 1: likelihood plausibility — caller-injected backend must implement
-        # ``score_log_likelihood(text: str) -> float``.
-        log_p_x = self.llm_backend.score_log_likelihood(x)
-        log_p_swap = self.llm_backend.score_log_likelihood(x_swap)
-        if abs(log_p_x - log_p_swap) > self.log_likelihood_threshold:
-            return SymmetryDecision(
-                False,
-                f"llm_implausible_swap_dll={log_p_x - log_p_swap:.2f}",
-            )
-
-        # Step 2: label-preserving judgment — caller-injected backend must
-        # implement ``judges_label_preserved(x: str, x_swap: str) -> bool``.
-        if not self.llm_backend.judges_label_preserved(x, x_swap):
-            return SymmetryDecision(False, "llm_label_flip_judged")
-
-        return SymmetryDecision(True, "llm_likelihood_and_label_pass")

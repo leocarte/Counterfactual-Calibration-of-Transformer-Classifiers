@@ -1,4 +1,4 @@
-# Calibration bake-off — Strategy 1/5: vanilla F1-only early stopping.
+# Calibration bake-off — Strategy 1/6: vanilla F1-only early stopping.
 # This is the BASELINE strategy (reproduces pre-pivot Model C behaviour).
 # Reported in paper §4.2 alongside the four alternatives.
 defaults:

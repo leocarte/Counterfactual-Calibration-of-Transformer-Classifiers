@@ -1,4 +1,4 @@
-# Calibration bake-off — Strategy 3/5: composite F1 - alpha*ECE, alpha=1.0.
+# Calibration bake-off — Strategy 3/6: composite F1 - alpha*ECE, alpha=1.0.
 defaults:
   - base
 
