@@ -81,7 +81,7 @@ bash rcp/submit.sh <job_name> "python3 scripts/train_cci.py --config configs/cci
 │   ├── 01_…_09_*.py                      CFR pipeline: manifest, forward pass, CFR/FPED-FNED/ECE, significance
 │   ├── _utils.py                         shared pipeline helpers
 │   ├── REPORT.md                         generated results report (CFR / ECE / FPED-FNED / significance numbers)
-│   ├── PIPELINE.md                         pipeline documentation
+│   ├── PIPELINE.md                       pipeline documentation
 │   └── attribution_analysis.py           integrated-gradients interpretability
 ├── configs/                            51 YAML experiment configs 
 ├── rcp/                                EPFL Run:ai cluster scaffold
@@ -93,7 +93,7 @@ bash rcp/submit.sh <job_name> "python3 scripts/train_cci.py --config configs/cci
 │   ├── raw/GoldStandard2024.csv          dataset (CC BY 4.0)
 │   ├── external/                         HateXplain / ToxiGen cross-dataset subsets
 │   └── download.sh                       refetch from Zenodo
-└── output/                             final submission deliverables
+└── deliverables/                         final submission deliverables
     ├── poster.pdf                        conference-style poster
     ├── report.pdf                        3-page paper (compiled PDF)
     └── screencast.mp4                    project video / screencast
@@ -101,7 +101,7 @@ bash rcp/submit.sh <job_name> "python3 scripts/train_cci.py --config configs/cci
 
 Root files: `README.md`, `LICENSE` (MIT), `requirements.txt`, `pyproject.toml`, `setup.cfg`.
 
-The `output/` directory collects the final deliverables for submission: the poster
+The `deliverables/` directory collects the final deliverables for submission: the poster
 (`poster.pdf`), the paper (`report.pdf`), and the project screencast.
 
 ## Dataset
