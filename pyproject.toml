@@ -1,11 +1,14 @@
 [project]
 name = "antisemitism-detection"
 version = "0.1.0"
-description = "EE-559 Mini-Project: Transformer-based antisemitism detection in social media text"
+description = "Counterfactual calibration and invariance for transformer-based antisemitism detection"
+readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [
-    {name = "EPFL EE-559 Group"},
+    {name = "Giacomo Case"},
+    {name = "Yasmin Chaqor"},
+    {name = "Leonardo Cartesegna"},
 ]
 
 [tool.pytest.ini_options]

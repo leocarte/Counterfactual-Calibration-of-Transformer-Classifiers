@@ -1,0 +1,588 @@
+<title>Swap Pair Validation</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:ital,wght@0,400;0,500;1,400&display=swap">
+<style>
+:root{
+  --ground:#F6F7F9; --surface:#FFFFFF;
+  --ink:#16181D; --muted:#626A76; --faint:#8A929E;
+  --line:#DCE0E6; --line-soft:#EAEDF1;
+  --accent:#2C5F7C; --accent-ink:#FFFFFF; --accent-soft:#E4EDF2;
+  --mark:#F0D08A; --mark-ink:#4A3608;
+  --yes:#2E7D5B; --no:#A8443A; --unclear:#8A6D3B;
+  --warn-bg:#FBF3E4; --warn-line:#E6D3A8; --warn-ink:#6B5320;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+  --serif:"IBM Plex Serif",Georgia,serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --r:6px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --ground:#0F1216; --surface:#171B21;
+  --ink:#E8EBEF; --muted:#9AA3AF; --faint:#6E7783;
+  --line:#2A313A; --line-soft:#222831;
+  --accent:#7FB3CE; --accent-ink:#0F1216; --accent-soft:#1E2C36;
+  --mark:#6B5620; --mark-ink:#F4E2B8;
+  --yes:#5FBF92; --no:#E08379; --unclear:#C6A664;
+  --warn-bg:#241E10; --warn-line:#4A3D1E; --warn-ink:#D9C48C;
+}}
+:root[data-theme="dark"]{
+  --ground:#0F1216; --surface:#171B21;
+  --ink:#E8EBEF; --muted:#9AA3AF; --faint:#6E7783;
+  --line:#2A313A; --line-soft:#222831;
+  --accent:#7FB3CE; --accent-ink:#0F1216; --accent-soft:#1E2C36;
+  --mark:#6B5620; --mark-ink:#F4E2B8;
+  --yes:#5FBF92; --no:#E08379; --unclear:#C6A664;
+  --warn-bg:#241E10; --warn-line:#4A3D1E; --warn-ink:#D9C48C;
+}
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--ink);font-family:var(--sans);
+  font-size:15px;line-height:1.55;margin:0;padding:0 20px 70px}
+.wrap{max-width:780px;margin:0 auto}
+header{display:flex;flex-wrap:wrap;gap:14px;align-items:baseline;padding:24px 0 12px}
+h1{font-size:19px;font-weight:600;margin:0;letter-spacing:-.01em}
+.sub{color:var(--muted);font-size:13px;margin:2px 0 0}
+.spacer{flex:1}
+label.fld{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--muted)}
+input[type=text]{font:inherit;font-size:13px;padding:5px 9px;border:1px solid var(--line);
+  border-radius:var(--r);background:var(--surface);color:var(--ink);width:128px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin-top:6px}
+.tabs button{font:inherit;font-size:13px;font-weight:500;padding:9px 14px;cursor:pointer;
+  background:none;border:0;border-bottom:2px solid transparent;color:var(--muted);margin-bottom:-1px}
+.tabs button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--accent)}
+.tabs .pill{font-family:var(--mono);font-size:11px;color:var(--faint);margin-left:6px}
+
+.notice{background:var(--warn-bg);border:1px solid var(--warn-line);color:var(--warn-ink);
+  border-radius:var(--r);padding:10px 13px;font-size:13px;margin:16px 0 0}
+.status{font-size:12px;color:var(--faint);margin:10px 0 0;font-family:var(--mono)}
+
+.bar{height:3px;background:var(--line-soft);border-radius:2px;margin:16px 0 6px;overflow:hidden}
+.bar>i{display:block;height:100%;background:var(--accent);width:0;transition:width .18s}
+.counts{display:flex;gap:16px;font-family:var(--mono);font-size:12px;color:var(--muted);
+  font-variant-numeric:tabular-nums}
+
+section.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;
+  padding:20px 22px;margin-top:14px}
+.rowhead{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.pid{font-family:var(--mono);font-size:12px;color:var(--faint)}
+.chip-gold{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+  padding:3px 8px;border-radius:20px;border:1px solid var(--line);color:var(--muted)}
+.chip-gold[data-v="ANTISEMITIC"]{color:var(--no);border-color:var(--no)}
+.tw{font-family:var(--serif);font-size:17px;line-height:1.6;margin:0}
+.tw-label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);
+  margin:0 0 5px;font-weight:500}
+.tw-block+.tw-block{margin-top:15px;padding-top:15px;border-top:1px solid var(--line-soft)}
+mark{background:var(--mark);color:var(--mark-ink);padding:1px 3px;border-radius:3px}
+
+.q{margin-top:18px}
+.q-h{font-size:13px;font-weight:600;margin:0 0 8px}
+.q-h span{font-weight:400;color:var(--muted)}
+.opts{display:flex;flex-wrap:wrap;gap:8px;border:0;padding:0;margin:0}
+label.opt{font-size:13px;padding:7px 13px;border-radius:var(--r);cursor:pointer;
+  background:var(--surface);color:var(--ink);border:1px solid var(--line);
+  display:inline-flex;align-items:center;gap:8px;user-select:none}
+label.opt:hover{border-color:var(--accent)}
+label.opt input{position:absolute;opacity:0;width:0;height:0}
+label.opt kbd{font-family:var(--mono);font-size:11px;color:var(--faint);
+  border:1px solid var(--line);border-radius:3px;padding:0 4px}
+label.opt:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
+label.opt:has(input:checked){background:var(--accent-soft);border-color:var(--accent);
+  color:var(--accent);font-weight:500;box-shadow:inset 0 0 0 1px var(--accent)}
+label.opt:has(input:checked[value=YES]){color:var(--yes);border-color:var(--yes);box-shadow:inset 0 0 0 1px var(--yes)}
+label.opt:has(input:checked[value=NO]){color:var(--no);border-color:var(--no);box-shadow:inset 0 0 0 1px var(--no)}
+label.opt:has(input:checked[value=UNCLEAR]){color:var(--unclear);border-color:var(--unclear);box-shadow:inset 0 0 0 1px var(--unclear)}
+
+textarea{font:inherit;width:100%;border:1px solid var(--line);border-radius:var(--r);
+  background:var(--surface);color:var(--ink);padding:8px 10px;resize:vertical}
+#notes{font-size:14px;min-height:42px;margin-top:6px}
+nav{display:flex;gap:10px;align-items:center;margin-top:16px}
+button.nav{font:inherit;font-size:13px;padding:8px 15px;border-radius:var(--r);cursor:pointer;
+  border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+button.nav.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:500}
+button.nav:disabled{opacity:.45;cursor:not-allowed}
+.hint{font-size:12px;color:var(--faint)}
+
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{text-align:left;font-size:11px;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--faint);font-weight:500;padding:0 10px 7px 0;border-bottom:1px solid var(--line)}
+td{padding:8px 10px 8px 0;border-bottom:1px solid var(--line-soft);
+  font-variant-numeric:tabular-nums}
+td.m{font-family:var(--mono);font-size:12.5px}
+.stat{display:flex;gap:26px;flex-wrap:wrap;margin-bottom:4px}
+.stat div{min-width:88px}
+.stat b{display:block;font-size:23px;font-weight:600;font-variant-numeric:tabular-nums;
+  letter-spacing:-.02em;line-height:1.2}
+.stat span{font-size:11.5px;color:var(--muted)}
+.jump{font:inherit;font-size:12.5px;color:var(--accent);background:none;border:0;
+  cursor:pointer;padding:0;text-decoration:underline}
+.split{display:inline-flex;gap:4px}
+.split i{font-style:normal;font-family:var(--mono);font-size:11px;padding:1px 5px;
+  border-radius:3px;background:var(--accent-soft)}
+.empty{color:var(--muted);font-size:13.5px;margin:6px 0 0}
+.io-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:12px 0}
+input[type=file]{font:inherit;font-size:12.5px;color:var(--muted);max-width:100%}
+.mini{font-size:12.5px;color:var(--muted);margin:0}
+code{font-family:var(--mono);font-size:12px;background:var(--accent-soft);padding:1px 4px;border-radius:3px}
+[hidden]{display:none!important}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+<header>
+  <div>
+    <h1>Swap Pair Validation</h1>
+    <p class="sub">Does the original label still apply after the identity term was rewritten?</p>
+  </div>
+  <div class="spacer"></div>
+  <label class="fld">Annotator <input type="text" id="who" placeholder="annotator_1" autocomplete="off"></label>
+</header>
+
+<div class="tabs" role="tablist">
+  <button role="tab" id="t-ann" aria-selected="true">Annotate</button>
+  <button role="tab" id="t-prog" aria-selected="false">Progress<span class="pill" id="pillProg"></span></button>
+  <button role="tab" id="t-dis" aria-selected="false">Disagreements<span class="pill" id="pillDis"></span></button>
+  <button role="tab" id="t-data" aria-selected="false">Data</button>
+</div>
+
+<p class="notice"><strong>Content warning.</strong> These are real tweets sampled for an
+antisemitism-detection audit; some contain slurs and hateful content. Judge each pair on its own,
+and do not discuss rows with the other annotators until all sheets are finished.</p>
+<p class="status" id="status">working locally in this browser</p>
+
+<!-- ANNOTATE -->
+<div id="v-ann">
+  <div class="bar"><i id="prog"></i></div>
+  <div class="counts">
+    <span id="pos">0 / 0</span><span id="done">0 answered</span><span id="left">0 left</span>
+  </div>
+  <section class="card">
+    <p class="notice" id="needName" hidden><strong>Put your name in the Annotator box first.</strong>
+      It is part of every record, so answering without it files your work under
+      &ldquo;annotator&rdquo; and renaming later leaves those rows behind.</p>
+    <div class="rowhead">
+      <span class="pid" id="pid"></span>
+      <span class="chip-gold" id="gold"></span>
+    </div>
+    <div class="tw-block"><p class="tw-label">Original</p><p class="tw" id="orig"></p></div>
+    <div class="tw-block"><p class="tw-label">Rewritten</p><p class="tw" id="swap"></p></div>
+
+    <div class="q">
+      <p class="q-h">Q1 &middot; Label preserved <span>Does the original label still apply to the rewritten text?</span></p>
+      <fieldset class="opts">
+        <label class="opt"><input type="radio" name="q1" value="YES"><kbd>1</kbd>Yes</label>
+        <label class="opt"><input type="radio" name="q1" value="NO"><kbd>2</kbd>No</label>
+        <label class="opt"><input type="radio" name="q1" value="UNCLEAR"><kbd>3</kbd>Unclear</label>
+      </fieldset>
+    </div>
+    <div class="q">
+      <p class="q-h">Q2 &middot; Fluency <span>Independently of the label, how does the rewrite read?</span></p>
+      <fieldset class="opts">
+        <label class="opt"><input type="radio" name="q2" value="OK"><kbd>4</kbd>OK</label>
+        <label class="opt"><input type="radio" name="q2" value="AWKWARD"><kbd>5</kbd>Awkward</label>
+        <label class="opt"><input type="radio" name="q2" value="UNGRAMMATICAL"><kbd>6</kbd>Ungrammatical</label>
+      </fieldset>
+    </div>
+    <div class="q">
+      <p class="q-h">Notes <span>optional, worth filling where the row was hard</span></p>
+      <textarea id="notes" rows="2" placeholder="e.g. hebrew here is the language, not the group"></textarea>
+    </div>
+    <nav>
+      <button class="nav" id="prev">&larr; Back</button>
+      <button class="nav primary" id="next">Next &rarr;</button>
+      <button class="nav" id="skipTo">Next unanswered</button>
+      <span class="hint">Enter for next</span>
+    </nav>
+  </section>
+</div>
+
+<!-- PROGRESS -->
+<div id="v-prog" hidden>
+  <section class="card">
+    <div class="stat">
+      <div><b id="sAgree">&ndash;</b><span>unanimous on Q1</span></div>
+      <div><b id="sKappa">&ndash;</b><span>Fleiss' &kappa; on Q1</span></div>
+      <div><b id="sValid">&ndash;</b><span>label preserved</span></div>
+      <div><b id="sFull">0</b><span>pairs fully rated</span></div>
+    </div>
+    <p class="mini" id="statNote"></p>
+  </section>
+  <section class="card">
+    <table>
+      <thead><tr><th>Annotator</th><th>Answered</th><th>Yes</th><th>No</th><th>Unclear</th></tr></thead>
+      <tbody id="perAnn"></tbody>
+    </table>
+    <p class="empty" id="progEmpty">No annotations yet.</p>
+  </section>
+</div>
+
+<!-- DISAGREEMENTS -->
+<div id="v-dis" hidden>
+  <section class="card">
+    <p class="mini">Pairs where annotators split on Q1. Your preamble calls these the interesting
+      cases, and they are what a reviewer will want described.</p>
+    <table>
+      <thead><tr><th>Pair</th><th>Split</th><th>Rewritten text</th><th></th></tr></thead>
+      <tbody id="disRows"></tbody>
+    </table>
+    <p class="empty" id="disEmpty">Nothing to review yet. Disagreements appear once two or more people have rated the same pair.</p>
+  </section>
+</div>
+
+<!-- DATA -->
+<div id="v-data" hidden>
+  <section class="card">
+    <p class="q-h">Load the sample</p>
+    <p class="mini">Export the <code>pairs</code> sheet from your <code>.xlsx</code> as CSV, or paste it.
+      Needs <code>pair_id</code>, <code>gold_label</code>, <code>original_text</code>, <code>swap_text</code>.
+      One person loads it; everyone else just opens this page.</p>
+    <div class="io-row">
+      <input type="file" id="file" accept=".csv,.tsv,.txt">
+      <button class="nav" id="loadPaste">Load pasted text</button>
+      <span class="hint" id="loadMsg"></span>
+    </div>
+    <textarea id="paste" rows="3" placeholder="pair_id,gold_label,original_text,swap_text"></textarea>
+  </section>
+  <section class="card">
+    <p class="q-h">Export</p>
+    <p class="mini">Exactly the columns <code>15_score_validation.py</code> reads. Save it next to
+      <code>key.csv</code> and run the scorer.</p>
+    <div class="io-row">
+      <button class="nav primary" id="dl">Download all annotations</button>
+      <button class="nav" id="copy">Copy instead</button>
+      <span class="hint" id="dlMsg"></span>
+    </div>
+    <textarea id="out" rows="6" readonly style="font-family:var(--mono);font-size:11.5px"></textarea>
+  </section>
+</div>
+</div>
+
+<script>
+var DEMO = [
+  {pair_id:"DEMO-1", gold_label:"NOT ANTISEMITIC", ord:0,
+   original_text:"Spent the afternoon reading about Jewish history at the library.",
+   swap_text:"Spent the afternoon reading about Muslim history at the library."},
+  {pair_id:"DEMO-2", gold_label:"NOT ANTISEMITIC", ord:1,
+   original_text:"My neighbour is Jewish and brought over food for the holiday.",
+   swap_text:"My neighbour is Buddhist and brought over food for the holiday."},
+  {pair_id:"DEMO-3", gold_label:"NOT ANTISEMITIC", ord:2,
+   original_text:"She is learning Hebrew this semester and loves it.",
+   swap_text:"She is learning Muslim this semester and loves it."}
+];
+var Q1 = ["YES","NO","UNCLEAR"], Q2 = ["OK","AWKWARD","UNGRAMMATICAL"];
+
+var rows = DEMO.slice(), i = 0, ann = {}, db = null, dls = null, tab = "ann";
+var $ = function(id){ return document.getElementById(id); };
+var esc = function(t){ var d = document.createElement("div"); d.textContent = t == null ? "" : t; return d.innerHTML; };
+var safe = function(s){ return String(s||"").replace(/[^A-Za-z0-9_.~:+-]/g, "-").slice(0,180) || "x"; };
+var me = function(){ return ($("who").value || "").trim() || "annotator"; };
+var key = function(a, p){ return safe(a) + "__" + safe(p); };
+
+function local(k, v){
+  try{ if(v === undefined) return JSON.parse(localStorage.getItem(k) || "null");
+       localStorage.setItem(k, JSON.stringify(v)); }catch(e){ return null; }
+}
+
+/* ---------- diff ---------- */
+function marked(a, b){
+  var A = a.split(/(\s+)/), B = b.split(/(\s+)/), p = 0;
+  while(p < A.length && p < B.length && A[p] === B[p]) p++;
+  var s = 0;
+  while(s < A.length-p && s < B.length-p && A[A.length-1-s] === B[B.length-1-s]) s++;
+  var mid = B.slice(p, B.length-s).join("");
+  if(!mid) return esc(b);
+  return esc(B.slice(0,p).join("")) + "<mark>" + esc(mid) + "</mark>" + esc(B.slice(B.length-s).join(""));
+}
+
+/* ---------- stats ---------- */
+function byPair(){
+  var m = {};
+  Object.keys(ann).forEach(function(k){
+    var a = ann[k]; if(!a || !a.pair_id || !a.label_preserved) return;
+    (m[a.pair_id] = m[a.pair_id] || []).push(a);
+  });
+  return m;
+}
+function fleiss(items, levels){
+  var n = items.length ? items[0].length : 0;
+  var use = items.filter(function(r){ return r.length === n; });
+  if(use.length < 2 || n < 2) return null;
+  var N = use.length, Pi = 0, colTot = levels.map(function(){ return 0; });
+  use.forEach(function(r){
+    var c = levels.map(function(L){ return r.filter(function(v){ return v === L; }).length; });
+    c.forEach(function(x, j){ colTot[j] += x; });
+    Pi += (c.reduce(function(s, x){ return s + x*x; }, 0) - n) / (n*(n-1));
+  });
+  var Pbar = Pi/N, Pe = colTot.reduce(function(s, x){ var p = x/(N*n); return s + p*p; }, 0);
+  if(Pe >= 1) return null;
+  return {k:(Pbar-Pe)/(1-Pe), N:N, n:n};
+}
+function majority(v){
+  var best = null, bn = 0;
+  Q1.forEach(function(L){ var c = v.filter(function(x){ return x === L; }).length;
+    if(c > bn){ bn = c; best = L; } else if(c === bn) best = best; });
+  var ties = Q1.filter(function(L){ return v.filter(function(x){ return x === L; }).length === bn; });
+  return ties.length > 1 ? "UNCLEAR" : best;
+}
+
+function renderStats(){
+  var m = byPair(), pairs = Object.keys(m);
+  var maxR = 0; pairs.forEach(function(p){ maxR = Math.max(maxR, m[p].length); });
+  var full = pairs.filter(function(p){ return m[p].length === maxR && maxR >= 2; });
+  $("sFull").textContent = full.length;
+  $("pillProg").textContent = pairs.length ? pairs.length : "";
+
+  if(full.length){
+    var unan = full.filter(function(p){
+      var v = m[p].map(function(a){ return a.label_preserved; });
+      return v.every(function(x){ return x === v[0]; });
+    }).length;
+    $("sAgree").textContent = Math.round(unan/full.length*100) + "%";
+    var yes = full.filter(function(p){
+      return majority(m[p].map(function(a){ return a.label_preserved; })) === "YES"; }).length;
+    $("sValid").textContent = Math.round(yes/full.length*100) + "%";
+    var f = fleiss(full.map(function(p){ return m[p].map(function(a){ return a.label_preserved; }); }), Q1);
+    $("sKappa").textContent = f ? f.k.toFixed(2) : "–";
+    $("statNote").textContent = "Over " + full.length + " pairs rated by all " + maxR +
+      " annotator" + (maxR>1?"s":"") + ". Fleiss' κ and the validity rate are what Reviewer 2 asked for.";
+  } else {
+    $("sAgree").textContent = $("sKappa").textContent = $("sValid").textContent = "–";
+    $("statNote").textContent = "Agreement appears once at least two people have rated the same pairs.";
+  }
+
+  var who = {};
+  Object.keys(ann).forEach(function(k){
+    var a = ann[k]; if(!a || !a.label_preserved) return;
+    var w = who[a.annotator] = who[a.annotator] || {n:0, YES:0, NO:0, UNCLEAR:0};
+    w.n++; if(w[a.label_preserved] !== undefined) w[a.label_preserved]++;
+  });
+  var names = Object.keys(who).sort();
+  $("perAnn").innerHTML = names.map(function(w){
+    var r = who[w];
+    return "<tr><td>"+esc(w)+"</td><td class=m>"+r.n+"</td><td class=m>"+r.YES+
+           "</td><td class=m>"+r.NO+"</td><td class=m>"+r.UNCLEAR+"</td></tr>";
+  }).join("");
+  $("progEmpty").hidden = names.length > 0;
+
+  var dis = full.filter(function(p){
+    var v = m[p].map(function(a){ return a.label_preserved; });
+    return !v.every(function(x){ return x === v[0]; });
+  });
+  $("pillDis").textContent = dis.length ? dis.length : "";
+  var idx = {}; rows.forEach(function(r, n){ idx[r.pair_id] = n; });
+  $("disRows").innerHTML = dis.map(function(p){
+    var v = m[p].map(function(a){ return a.annotator + ":" + a.label_preserved[0]; });
+    var row = rows[idx[p]];
+    return "<tr><td class=m>"+esc(p)+"</td><td><span class=split>"+
+      v.map(function(x){ return "<i>"+esc(x)+"</i>"; }).join("")+"</span></td><td>"+
+      esc((row ? row.swap_text : "").slice(0,64))+"…</td><td>"+
+      (idx[p] !== undefined ? "<button class=jump data-go=\""+esc(p)+"\">open</button>" : "")+"</td></tr>";
+  }).join("");
+  $("disEmpty").hidden = dis.length > 0;
+  csv();
+}
+
+/* ---------- annotate ---------- */
+function render(){
+  var r = rows[i];
+  if(!r){ $("pid").textContent = ""; return; }
+  $("pid").textContent = r.pair_id;
+  var g = String(r.gold_label||"").toUpperCase();
+  $("gold").textContent = g.toLowerCase(); $("gold").setAttribute("data-v", g);
+  $("orig").innerHTML = marked(r.swap_text, r.original_text);
+  $("swap").innerHTML = marked(r.original_text, r.swap_text);
+  var a = ann[key(me(), r.pair_id)] || {};
+  document.querySelectorAll("input[name=q1]").forEach(function(x){ x.checked = x.value === a.label_preserved; });
+  document.querySelectorAll("input[name=q2]").forEach(function(x){ x.checked = x.value === a.fluency; });
+  $("notes").value = a.notes || "";
+  $("pos").textContent = (i+1) + " / " + rows.length;
+  var mine = rows.filter(function(x){
+    var y = ann[key(me(), x.pair_id)]; return y && y.label_preserved && y.fluency; }).length;
+  $("done").textContent = mine + " answered";
+  $("left").textContent = (rows.length - mine) + " left";
+  $("prog").style.width = (rows.length ? mine/rows.length*100 : 0) + "%";
+  $("prev").disabled = i === 0; $("next").disabled = i >= rows.length-1;
+
+  /* The annotator name is part of the record key, so answering before typing
+     it files the work under "annotator" and renaming afterwards orphans it.
+     Block answering until there is a name. */
+  var named = ($("who").value || "").trim() !== "";
+  document.querySelectorAll("input[name=q1],input[name=q2]").forEach(function(x){ x.disabled = !named; });
+  $("notes").disabled = !named;
+  document.querySelectorAll("label.opt").forEach(function(l){ l.style.opacity = named ? "" : ".45"; });
+  $("needName").hidden = named;
+}
+
+function save(patch){
+  var r = rows[i]; if(!r) return;
+  var k = key(me(), r.pair_id);
+  var cur = ann[k] || {pair_id:r.pair_id, annotator:me(), label_preserved:"", fluency:"", notes:""};
+  Object.keys(patch).forEach(function(f){ cur[f] = patch[f]; });
+  cur.ts = Date.now();
+  ann[k] = cur;
+  local("swapval_ann", ann);
+  render(); renderStats();
+  if(db) db.doc("ann/"+k).set(cur).catch(function(){});
+}
+
+document.querySelectorAll("input[name=q1],input[name=q2]").forEach(function(x){
+  x.addEventListener("change", function(){
+    save(x.name === "q1" ? {label_preserved:x.value} : {fluency:x.value});
+  });
+});
+$("notes").addEventListener("change", function(){ save({notes:$("notes").value}); });
+$("next").addEventListener("click", function(){ if(i < rows.length-1){ i++; render(); } });
+$("prev").addEventListener("click", function(){ if(i > 0){ i--; render(); } });
+$("skipTo").addEventListener("click", function(){
+  for(var n = 1; n <= rows.length; n++){
+    var j = (i+n) % rows.length, a = ann[key(me(), rows[j].pair_id)];
+    if(!a || !a.label_preserved || !a.fluency){ i = j; render(); return; }
+  }
+});
+$("who").addEventListener("input", function(){ local("swapval_who", $("who").value); render(); });
+$("disRows").addEventListener("click", function(e){
+  var p = e.target.getAttribute && e.target.getAttribute("data-go"); if(!p) return;
+  rows.forEach(function(r, n){ if(r.pair_id === p) i = n; });
+  show("ann"); render();
+});
+
+document.addEventListener("keydown", function(e){
+  /* radios are INPUTs and take focus after a click, so exempt them or the
+     number shortcuts stop working the moment you answer with the mouse */
+  var t = e.target;
+  if(t.tagName === "TEXTAREA" || (t.tagName === "INPUT" && t.type !== "radio") || tab !== "ann") return;
+  var m = {"1":["1","YES"],"2":["1","NO"],"3":["1","UNCLEAR"],
+           "4":["2","OK"],"5":["2","AWKWARD"],"6":["2","UNGRAMMATICAL"]}[e.key];
+  if(m){ e.preventDefault();
+    save(m[0] === "1" ? {label_preserved:m[1]} : {fluency:m[1]}); return; }
+  if(e.key === "Enter" || e.key === "ArrowRight"){ e.preventDefault(); $("next").click(); }
+  if(e.key === "ArrowLeft"){ e.preventDefault(); $("prev").click(); }
+});
+
+/* ---------- tabs ---------- */
+function show(t){
+  tab = t;
+  [["ann","t-ann","v-ann"],["prog","t-prog","v-prog"],["dis","t-dis","v-dis"],["data","t-data","v-data"]]
+    .forEach(function(x){
+      $(x[1]).setAttribute("aria-selected", String(x[0] === t));
+      $(x[2]).hidden = x[0] !== t;
+    });
+}
+$("t-ann").onclick = function(){ show("ann"); };
+$("t-prog").onclick = function(){ show("prog"); renderStats(); };
+$("t-dis").onclick = function(){ show("dis"); renderStats(); };
+$("t-data").onclick = function(){ show("data"); csv(); };
+
+/* ---------- csv ---------- */
+function q(s){ s = s == null ? "" : String(s); return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; }
+function csv(){
+  var out = ["pair_id,annotator,label_preserved,fluency,notes"];
+  Object.keys(ann).sort().forEach(function(k){
+    var a = ann[k]; if(!a || !a.label_preserved) return;
+    out.push([q(a.pair_id), q(a.annotator), q(a.label_preserved), q(a.fluency||""), q(a.notes||"")].join(","));
+  });
+  $("out").value = out.join("\n");
+  return out.join("\n");
+}
+$("dl").addEventListener("click", function(){
+  var data = csv();
+  if(!dls){ $("dlMsg").textContent = "Downloads unavailable here; use Copy instead."; return; }
+  dls.save({filename:"pair_validation.csv", data:data}).then(function(){
+    $("dlMsg").textContent = "Saved.";
+  }, function(err){
+    $("dlMsg").textContent = err && err.code === "declined" ? "Cancelled." : "Could not save; use Copy instead.";
+  });
+});
+$("copy").addEventListener("click", function(){
+  var t = $("out"); t.removeAttribute("readonly"); t.select(); t.setSelectionRange(0, 999999);
+  var ok = false; try{ ok = document.execCommand("copy"); }catch(e){}
+  t.setAttribute("readonly","");
+  $("dlMsg").textContent = ok ? "Copied." : "Select the text below and copy manually.";
+});
+
+/* ---------- parsing / loading ---------- */
+function parse(text){
+  text = text.replace(/\r\n?/g, "\n").trim(); if(!text) return [];
+  var nl = text.indexOf("\n"), head = text.slice(0, nl < 0 ? text.length : nl);
+  var sep = head.split("\t").length > head.split(",").length ? "\t" : ",";
+  var recs = [], f = "", rec = [], inq = false;
+  for(var k = 0; k < text.length; k++){
+    var c = text[k];
+    if(inq){ if(c === '"'){ if(text[k+1] === '"'){ f += '"'; k++; } else inq = false; } else f += c; }
+    else if(c === '"') inq = true;
+    else if(c === sep){ rec.push(f); f = ""; }
+    else if(c === "\n"){ rec.push(f); recs.push(rec); rec = []; f = ""; }
+    else f += c;
+  }
+  rec.push(f); if(rec.length > 1 || rec[0] !== "") recs.push(rec);
+  var hdr = recs.shift().map(function(h){ return h.trim().toLowerCase(); });
+  return recs.filter(function(r){ return r.some(function(v){ return v.trim() !== ""; }); })
+    .map(function(r){ var o = {}; hdr.forEach(function(h, n){ o[h] = (r[n]||"").trim(); }); return o; });
+}
+function load(text){
+  var got;
+  try{ got = parse(text); }catch(e){ $("loadMsg").textContent = "Could not read that."; return; }
+  var need = ["pair_id","gold_label","original_text","swap_text"];
+  var miss = need.filter(function(c){ return !got.length || !(c in got[0]); });
+  if(miss.length){ $("loadMsg").textContent = "Missing: " + miss.join(", "); return; }
+  rows = got.map(function(r, n){ r.ord = n; return r; }); i = 0;
+  /* Drop answers for pairs that are not in the new sample, so the demo rows
+     do not travel into the export the scorer reads. */
+  var keep = {}; rows.forEach(function(r){ keep[r.pair_id] = 1; });
+  Object.keys(ann).forEach(function(k){ if(!ann[k] || !keep[ann[k].pair_id]) delete ann[k]; });
+  local("swapval_rows", rows); local("swapval_ann", ann);
+  $("loadMsg").textContent = rows.length + " pairs loaded.";
+  if(db) push(rows);
+  show("ann"); render(); renderStats();
+}
+function push(list){
+  var n = 0;
+  (function step(){
+    if(n >= list.length){ $("loadMsg").textContent = list.length + " pairs shared with the team."; return; }
+    var chunk = list.slice(n, n+5); n += 5;
+    Promise.all(chunk.map(function(r){
+      return db.doc("pairs/"+safe(r.pair_id)).set({
+        pair_id:r.pair_id, gold_label:r.gold_label,
+        original_text:r.original_text, swap_text:r.swap_text, ord:r.ord
+      }).catch(function(){});
+    })).then(function(){ $("loadMsg").textContent = "sharing " + n + "/" + list.length + "…"; setTimeout(step, 60); });
+  })();
+}
+$("file").addEventListener("change", function(e){
+  var f = e.target.files[0]; if(!f) return;
+  var fr = new FileReader(); fr.onload = function(){ load(String(fr.result)); }; fr.readAsText(f);
+});
+$("loadPaste").addEventListener("click", function(){ load($("paste").value); });
+
+/* ---------- boot ---------- */
+var w = local("swapval_who"); if(w) $("who").value = w;
+var lr = local("swapval_rows"); if(lr && lr.length) rows = lr;
+var la = local("swapval_ann"); if(la) ann = la;
+show("ann"); render(); renderStats();
+
+if(window.claude && claude.use){
+  claude.use("downloads").then(function(d){ dls = d; }, function(){});
+  claude.use("db").then(function(d){
+    if(!d) return;
+    db = d;
+    $("status").textContent = "shared with your team · live";
+    db.collection("pairs").onSnapshot(function(snap){
+      if(snap.empty) return;
+      var got = snap.docs.map(function(x){ return x.data(); })
+        .sort(function(a, b){ return (a.ord||0) - (b.ord||0); });
+      if(got.length){ rows = got; local("swapval_rows", rows);
+        if(i >= rows.length) i = 0; render(); renderStats(); }
+    }, function(){});
+    db.collection("ann").onSnapshot(function(snap){
+      snap.docs.forEach(function(x){
+        var a = x.data(); if(!a || !a.pair_id) return;
+        /* A write echoes back as a snapshot. If we already hold a newer edit
+           for this row, keep it: otherwise answering Q1 then Q2 quickly lets
+           the Q1-only echo land last and wipe the Q2 selection. */
+        var mine = ann[x.id];
+        if(mine && mine.ts && a.ts && a.ts < mine.ts) return;
+        ann[x.id] = a;
+      });
+      local("swapval_ann", ann); render(); renderStats();
+    }, function(){});
+  }, function(){});
+}
+</script>

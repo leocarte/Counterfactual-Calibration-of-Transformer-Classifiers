@@ -73,8 +73,8 @@ ALTERNATIVE_GROUPS: dict[str, tuple[str, ...]] = {
 
 # For swap construction: each Jewish religious-ethnic token maps to a parallel
 # token in each alternative group (singular noun, plural noun, adjective).
-# Grammatical number/role is approximate; the symmetry filter rejects
-# swaps that are not label-preserving.
+# Grammatical number and role are approximate; token-level replacements
+# do not guarantee grammatical sentences.
 JEWISH_TO_ALTERNATIVE_TOKEN: dict[str, dict[str, str]] = {
     # singular noun / person
     "jew":    {"muslim": "muslim",    "christian": "christian", "hindu": "hindu",   "buddhist": "buddhist", "atheist": "atheist"},

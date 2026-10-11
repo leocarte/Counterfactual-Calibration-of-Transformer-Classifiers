@@ -9,6 +9,7 @@ Usage:
 import argparse
 import json
 import os
+import random
 import sys
 from pathlib import Path
 
@@ -24,8 +25,10 @@ from src.utils.config import load_config, save_config
 from src.utils.seed import seed_everything
 from src.utils.logging_utils import get_logger
 from src.data.preprocessing import preprocess_tweet
-from src.data.splits import create_splits, save_splits, load_splits
+from src.data.splits import create_splits, save_splits, load_splits, stratified_label_mask
 from src.data.dataset import AntisemitismDataset
+from src.data.cf_dataset import expand_with_counterfactual_rows
+from src.data.counterfactual_swap import CounterfactualSwapEngine
 from src.models.transformer_classifier import TransformerClassifier
 from src.training.trainer import Trainer
 from src.evaluation.metrics import compute_metrics, per_keyword_metrics
@@ -45,6 +48,13 @@ def main():
     parser.add_argument("--config", type=str, required=True, help="Path to config YAML")
     parser.add_argument("--no-wandb", action="store_true", help="Disable WandB logging")
     parser.add_argument(
+        "--label-fraction", type=float, default=1.0,
+        help="Semi-supervised sweep: train on this class-stratified fraction of "
+             "the labelled rows and DROP the rest. Model C and CDA cannot use "
+             "unlabelled text; CCI can, which is what the sweep measures. "
+             "1.0 (default) is the fully supervised setting.",
+    )
+    parser.add_argument(
         "--seed", type=int, default=None,
         help="Override cfg.seed. When set, the experiment_name is also suffixed "
              "with `_seed{N}` so multi-seed runs go to separate output folders."
@@ -55,6 +65,12 @@ def main():
     cfg = load_config(args.config)
 
     # Multi-seed support: override the config seed from CLI and keep outputs separated.
+    # Tag the run with its label fraction BEFORE the seed suffix, matching the
+    # "<base>_lf<frac>_seed<N>" layout 12_semisup.py reads. Without this the
+    # sweep would reuse the main runs' experiment names and overwrite their
+    # checkpoints and metrics.
+    if args.label_fraction < 1.0:
+        cfg.experiment_name = f"{cfg.experiment_name}_lf{args.label_fraction:g}"
     if args.seed is not None:
         cfg.seed = args.seed
         cfg.experiment_name = f"{cfg.experiment_name}_seed{args.seed}"
@@ -117,9 +133,66 @@ def main():
     tokenizer = TransformerClassifier.load_tokenizer(cfg.model.name)
 
     # Datasets
+    train_texts = splits["train"][cfg.data.text_column].tolist()
+    train_labels = splits["train"][cfg.data.label_column].tolist()
+
+    # Semi-supervised sweep. Model C and CDA have no way to use an unlabelled
+    # row -- CDA copies the source label onto each swap, so a row without a label
+    # yields nothing -- and the honest comparator therefore DROPS the remainder
+    # rather than carrying it. CCI keeps it (see train_cci.py); that difference
+    # is exactly what the sweep is built to measure. Subsampling happens before
+    # the CDA expansion below, so CDA can only expand rows it is entitled to.
+    if args.label_fraction < 1.0:
+        mask = stratified_label_mask(train_labels, args.label_fraction, cfg.seed)
+        train_texts = [t for t, m in zip(train_texts, mask) if m]
+        train_labels = [l for l, m in zip(train_labels, mask) if m]
+        logger.info(
+            "Label fraction %.2f: training on %d labelled rows (%d positives); "
+            "%d unlabelled rows dropped, as this method cannot use them.",
+            args.label_fraction, len(train_labels), int(sum(train_labels)),
+            int((~mask).sum()),
+        )
+
+    # Counterfactual data augmentation (CDA baseline): statically append the
+    # admissible identity-swapped copies of TRAIN rows as extra labeled rows,
+    # label copied from the source. No consistency loss anywhere — this is the
+    # "is CCI v2 just more data?" comparator. Uses the same swap engine knobs
+    # (cf_swaps_per_token / cf_pairs_cap_per_example) and heuristic symmetry
+    # filter as the CLP/CCI trainers, so every counterfactual method trains
+    # against the same admissible-swap distribution. Dev/test stay untouched;
+    # exclude_texts additionally guards against a swapped train tweet ever
+    # colliding with an evaluation tweet.
+    if cfg.training.get("cda_augmentation", False):
+        filter_kind = cfg.training.get("cf_symmetry_filter", "heuristic")
+        if filter_kind != "heuristic":
+            logger.error(
+                f"cda_augmentation supports only cf_symmetry_filter='heuristic' "
+                f"(CDA is defined over admissible swaps); got {filter_kind!r}"
+            )
+            sys.exit(2)
+        swap_engine = CounterfactualSwapEngine(  # default classifier = heuristic
+            swaps_per_token=int(cfg.training.get("cf_swaps_per_token", 3)),
+            pairs_cap_per_example=int(cfg.training.get("cf_pairs_cap_per_example", 5)),
+            rng=random.Random(cfg.seed),
+        )
+        n_original = len(train_texts)
+        train_texts, train_labels = expand_with_counterfactual_rows(
+            texts=train_texts,
+            labels=train_labels,
+            swap_engine=swap_engine,
+            exclude_texts=(
+                set(splits["dev"][cfg.data.text_column])
+                | set(splits["test"][cfg.data.text_column])
+            ),
+        )
+        logger.info(
+            f"CDA: train split expanded {n_original} -> {len(train_texts)} rows "
+            f"(+{len(train_texts) - n_original} counterfactual copies)"
+        )
+
     train_dataset = AntisemitismDataset(
-        texts=splits["train"][cfg.data.text_column].tolist(),
-        labels=splits["train"][cfg.data.label_column].tolist(),
+        texts=train_texts,
+        labels=train_labels,
         tokenizer=tokenizer,
         max_length=cfg.data.max_length,
         keyword_masking=cfg.training.get("keyword_masking", False),

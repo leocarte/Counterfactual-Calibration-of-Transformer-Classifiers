@@ -1,0 +1,51 @@
+\section{Experiments}
+\label{sec:experiments}
+
+\subsection{Implementation Details}
+
+All experiments are implemented in PyTorch 2.1+ using the HuggingFace Transformers library (v4.36+). Configuration is managed via YAML files parsed with OmegaConf, ensuring full reproducibility through saved experiment configs. Training and evaluation logging uses Weights \& Biases for experiment tracking and Rich for console output.
+
+\paragraph{Fine-tuned models.}
+Models A, B, B2, and C are trained on a single NVIDIA GPU. The effective batch size of 16 is achieved through micro-batches of 8 with 2 gradient accumulation steps, fitting within 4~GB of GPU memory for all model architectures. Tokenization uses each model's native tokenizer: BPE for RoBERTa, SentencePiece for DeBERTa-v3, and WordPiece for HateBERT. All inputs are padded or truncated to 128 tokens.
+
+For Models A, B, and B2, the loss function is weighted cross-entropy:
+\begin{equation}
+    \mathcal{L}_{\text{WCE}} = -\sum_{i} w_{y_i} \log p(y_i \mid x_i)
+\end{equation}
+where $w_0 = 1.0$ (not antisemitic) and $w_1 = 4.79$ (antisemitic), reflecting the inverse class frequency.
+
+For Model~C, we use focal loss:
+\begin{equation}
+    \mathcal{L}_{\text{FL}} = -\alpha_t (1 - p_t)^\gamma \log(p_t)
+\end{equation}
+where $p_t$ is the predicted probability of the correct class, $\gamma = 2.0$ is the focusing parameter, and $\alpha_t$ is the class weight ($\alpha = 0.75$ for the positive class, $1 - \alpha = 0.25$ for the negative class). The $(1-p_t)^\gamma$ term ensures that easy, well-classified examples contribute near-zero loss, focusing optimization on hard examples near the decision boundary.
+
+\paragraph{Multi-seed protocol.}
+To separate architectural effects from seed-level variance, every fine-tuned model is trained with six seeds $\{42, 43, 44, 45, 46, 47\}$ (24 full training runs). Aggregate metrics are reported as mean~$\pm$~std across seeds. Per-seed results are preserved for post-hoc analysis (\S\ref{sec:bimodality}).
+
+\paragraph{LLM experiments (pending).}
+Llama-3.1-8B-Instruct is loaded with 4-bit NF4 quantization using bitsandbytes, with float16 compute dtype and double quantization enabled. Inference is performed sequentially (one tweet at a time) due to variable output lengths. The model requires approximately 5~GB of GPU memory in this configuration. LLM inference is configured and wired into the cluster submission pipeline, but actual results were not available at the time of writing due to pending access to the gated Llama-3.1-8B-Instruct checkpoint.
+
+\paragraph{Response parsing.}
+For LLM outputs, we extract the classification label using a rule-based parser that checks for ``not antisemitic'' before ``antisemitic'' (to avoid false substring matches). For Guided CoT (Model~D3), we additionally search for classification keywords in lines containing ``classification'' or ``classify.'' Responses that match neither label are counted as invalid.
+
+\subsection{Ablation Studies}
+\label{sec:ablations}
+
+We conduct four controlled ablation studies to isolate the contribution of each design choice:
+
+\paragraph{A1: Pre-training domain (Model B vs.\ B2).}
+Comparing DeBERTa-v3-base (general-purpose, 184M) against HateBERT (hate-specific, 110M) tests whether domain-specific pretraining on hateful Reddit content compensates for the architectural and scale advantages of DeBERTa-v3. Both models use identical training hyperparameters and weighted cross-entropy loss. A strong HateBERT performance would suggest that hate speech pretraining captures useful linguistic patterns; a weak performance would indicate that modern architectures and larger pretraining corpora are more important than domain specificity.
+
+\paragraph{A2: Loss function (Model B vs.\ Model C without masking).}
+To isolate the effect of focal loss from keyword masking, we compare DeBERTa-v3 with weighted CE (Model~B) against DeBERTa-v3 with focal loss but \emph{without} keyword masking. Focal loss should improve performance on hard boundary cases at the potential cost of slightly lower performance on easy cases. We measure this through both overall macro-F1 and the distribution of per-sample confidence scores.
+
+\paragraph{A3: Keyword masking as a debiasing probe (Model C with vs.\ without masking).}
+We compare Model~C (full: focal loss + keyword masking) against the same model without keyword masking, treating identity-term masking as an established debiasing baseline rather than a methodological novelty (cf.~\citet{park2018reducing}, \citet{kennedy2020contextualizing}, \citet{pisterzi2023debiasing}). The primary evaluation metric is the \emph{keyword sensitivity flip rate}: the fraction of test predictions that change when identity keywords are removed. We also report FPED/FNED on identity-term probe sets following~\citet{dixon2018measuring} to audit whether the masking actually reduces identity-term bias.
+
+\paragraph{A4: Prompting strategy (D1 vs.\ D2 vs.\ D3).}
+We compare three prompting strategies on the same Llama-3.1-8B-Instruct model to measure: (i)~the benefit of in-context examples (zero-shot $\rightarrow$ few-shot), (ii)~the benefit of structured reasoning (few-shot $\rightarrow$ Guided CoT), and (iii)~the overall gap between the best prompting strategy and the best fine-tuned model. We additionally report the invalid response rate, as more complex prompts sometimes cause the model to deviate from the expected output format.
+
+\subsection{Computational Budget}
+
+Each fine-tuned model trains for approximately 3--5 minutes on a single NVIDIA A100-40G GPU (5--7 epochs of 8{,}479 training samples at effective batch size 16). The full multi-seed sweep of 24 training runs finishes in $\sim 20$ minutes wall-clock when runs are dispatched in parallel through the EPFL RCP Run:ai scheduler. LLM inference on 1{,}060 test samples with sequential decoding is estimated at 2--4 hours per configuration on a single A100-40G.

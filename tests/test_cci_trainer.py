@@ -134,6 +134,7 @@ class TestSchedulerIncludesHead:
         # Several scheduler steps to leave the trivial step-0 state and
         # exercise both warmup and decay regions.
         for _ in range(5):
+            trainer.optimizer.step()
             trainer.scheduler.step()
 
         lrs = [g["lr"] for g in trainer.optimizer.param_groups]

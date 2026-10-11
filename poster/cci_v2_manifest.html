@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=1000" />
+<title>CCI v2: counterfactual test manifest and CFR</title>
+
+<!-- LaTeX math via KaTeX -->
+<link rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css"
+      crossorigin="anonymous">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js" crossorigin="anonymous"
+  onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}],throwOnError:false});"></script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#1F2937; --slate:#6B7280; --line:#E5E7EB;
+  --blue:#0072B2; --gold:#E69F00; --green:#009E73; --verm:#D55E00;
+  --blue-t:#E2F0F8; --gold-t:#FBF1DD; --green-t:#E6F6F1; --verm-t:#FBE7DC; --mute-t:#F3F4F6;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:#fff}
+body{font-family:'Inter',system-ui,sans-serif;color:var(--ink);display:flex;justify-content:center;padding:18px}
+
+.figure{width:940px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:26px 30px 22px}
+.fig-head{margin-bottom:16px}
+.fig-head h1{font-size:1.5rem;font-weight:800;letter-spacing:-.02em}
+.fig-head .sub{margin-top:5px;color:var(--slate);font-size:.86rem;font-weight:500;line-height:1.45}
+
+.cols{display:grid;grid-template-columns:190px 24px 244px 24px 1fr;align-items:center;
+  font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--slate);
+  padding:0 2px 8px;border-bottom:2px solid var(--ink)}
+.cols .c3{grid-column:5}
+.row{display:grid;grid-template-columns:190px 24px 244px 24px 1fr;align-items:center;
+  padding:10px 2px;border-bottom:1px solid var(--line)}
+.row:last-of-type{border-bottom:none}
+.chev{color:#C3C8D0;font-size:1.05rem;text-align:center;font-weight:700}
+
+.group{position:relative;border-radius:10px;padding:9px 12px 9px 16px;background:var(--mute-t)}
+.group::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:4px;border-radius:4px}
+.group .gname{font-weight:700;font-size:.98rem}
+.group .gtw{font-size:.73rem;color:var(--slate);margin-top:1px}
+.g-blue{background:var(--blue-t)} .g-blue::before{background:var(--blue)}
+.g-gold{background:var(--gold-t)} .g-gold::before{background:var(--gold)}
+.g-mute{background:var(--mute-t)} .g-mute::before{background:#B6BCC4}
+.g-mute .gname{color:#7b818b}
+
+.verdict{display:flex;flex-direction:column;gap:5px}
+.verdict .vtext{font-size:.83rem;font-weight:500}
+.badge{display:inline-flex;align-items:center;gap:6px;width:max-content;
+  font-size:.69rem;font-weight:700;padding:3px 9px;border-radius:999px}
+.b-accept{color:#067a5a;background:var(--green-t);border:1px solid #b8e6d7}
+.b-reject{color:#b34a00;background:var(--verm-t);border:1px solid #f3c3a6}
+
+.pairs{display:flex;align-items:center;gap:12px}
+.track{flex:1;height:21px;background:var(--mute-t);border-radius:6px;overflow:hidden}
+.fill{height:100%;border-radius:6px;background:linear-gradient(90deg,#2bb98f,var(--green))}
+.pcount{font-weight:800;font-size:1rem;min-width:52px;text-align:right}
+.pcount.zero{color:var(--verm);font-weight:700;font-size:.82rem;min-width:0;text-align:left}
+.byc{color:var(--slate);font-style:italic;font-size:.73rem}
+
+.total{display:grid;grid-template-columns:190px 24px 244px 24px 1fr;margin-top:10px}
+.total .t{grid-column:5;border-top:2px solid var(--ink);padding-top:9px;font-weight:700;font-size:1rem}
+
+/* ===== CFR link panel ===== */
+.cfr{margin-top:18px;border-radius:12px;border:1px solid #f3c3a6;
+  background:linear-gradient(180deg,#fff,#fdf1ea);padding:16px 18px}
+.cfr .ch{display:flex;align-items:center;gap:10px;font-weight:700;font-size:.95rem;color:#b34a00;margin-bottom:10px}
+.cfr .ch .pill{font-size:.68rem;font-weight:700;background:#fff;border:1px solid #f3c3a6;color:#b34a00;
+  padding:2px 9px;border-radius:999px}
+.cfr .forms{display:flex;flex-wrap:wrap;gap:10px}
+.cfr .f{flex:1;min-width:250px;background:#fff;border:1px solid var(--line);border-radius:9px;
+  padding:9px 12px}
+.cfr .f .fl{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--slate);margin-bottom:4px}
+.cfr .f .fm{font-size:.96rem}
+.cfr .headline{margin-top:11px;display:flex;align-items:center;gap:12px;
+  background:var(--green-t);border:1px solid #b8e6d7;border-radius:9px;padding:9px 14px;
+  font-size:.9rem;font-weight:600;color:#0a4a3a}
+.cfr .headline .big{font-size:1.35rem;font-weight:800;color:#067a5a}
+
+.note{margin-top:14px;font-size:.77rem;color:var(--slate);line-height:1.5}
+.note b{color:var(--ink)} .note .ok{color:#067a5a;font-weight:700} .note .no{color:#b34a00;font-weight:700}
+
+@media print{ html,body{background:#fff} body{padding:0} .figure{border:none} }
+</style>
+</head>
+<body>
+  <div class="figure">
+
+    <div class="fig-head">
+      <h1>Counterfactual test manifest $\rightarrow$ CFR</h1>
+      <div class="sub">Fate of each source group on the 1,060-tweet test split. A <b>pair</b> $(x,x')$ = one tweet $x$ + one label-preserving identity swap $x'$; groups bucketed by primary keyword (slur&nbsp;&gt;&nbsp;proxy&nbsp;&gt;&nbsp;religious). The resulting pair set $\mathcal{P}$ is the evaluation set for the counterfactual flip rate.</div>
+    </div>
+
+    <div class="cols">
+      <div>Source group</div><div></div><div>Symmetry-filter verdict</div><div></div>
+      <div class="c3">Pairs in manifest $\mathcal{P}$</div>
+    </div>
+
+    <div class="row">
+      <div class="group g-blue"><div class="gname">Jews</div><div class="gtw">599 tweets</div></div>
+      <div class="chev">›</div>
+      <div class="verdict"><div class="vtext">religious anchor present</div>
+        <span class="badge b-accept">✓ rule 3 · accept</span></div>
+      <div class="chev">›</div>
+      <div class="pairs"><div class="track"><div class="fill" style="width:100%"></div></div><div class="pcount">1,725</div></div>
+    </div>
+
+    <div class="row">
+      <div class="group g-gold"><div class="gname">Israel</div><div class="gtw">396 tweets</div></div>
+      <div class="chev">›</div>
+      <div class="verdict"><div class="vtext">proxy <i>and</i> Jewish mention</div>
+        <span class="badge b-accept">✓ rule 3 · accept</span></div>
+      <div class="chev">›</div>
+      <div class="pairs"><div class="track"><div class="fill" style="width:22.7%"></div></div><div class="pcount">392</div></div>
+    </div>
+
+    <div class="total"><div class="t">$|\mathcal{P}| = 2{,}117$ symmetric pairs</div></div>
+
+    <!-- ===== CFR LINK ===== -->
+    <div class="cfr">
+      <div class="ch"><span class="pill">$\mathcal{P}$</span> evaluated by the Counterfactual Flip Rate (CFR), aggregated per pair</div>
+      <div class="forms">
+        <div class="f">
+          <div class="fl">Hard CFR (decision flips)</div>
+          <div class="fm">$\mathrm{CFR}_{\text{hard}}=\dfrac{1}{|\mathcal{P}|}\!\!\sum_{(x,x')\in\mathcal{P}}\!\!\mathbb{1}\big[\hat{y}(x)\neq\hat{y}(x')\big]$</div>
+        </div>
+        <div class="f">
+          <div class="fl">Soft CFR (probability shift)</div>
+          <div class="fm">$\mathrm{CFR}_{\text{soft}}=\dfrac{1}{|\mathcal{P}|}\!\!\sum_{(x,x')\in\mathcal{P}}\!\!\big|\,p(x)-p(x')\,\big|$</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

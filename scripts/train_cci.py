@@ -37,7 +37,7 @@ from src.utils.config import load_config, save_config
 from src.utils.seed import seed_everything
 from src.utils.logging_utils import get_logger
 from src.data.preprocessing import preprocess_tweet
-from src.data.splits import create_splits, save_splits, load_splits
+from src.data.splits import create_splits, save_splits, load_splits, stratified_label_mask
 from src.data.dataset import AntisemitismDataset
 from src.data.cf_dataset import CounterfactualDataset, cf_collate_fn
 from src.data.counterfactual_swap import CounterfactualSwapEngine, compute_swap_yield
@@ -97,9 +97,22 @@ def main():
     parser.add_argument("--config", type=str, required=True, help="Path to config YAML")
     parser.add_argument("--no-wandb", action="store_true")
     parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument(
+        "--label-fraction", type=float, default=1.0,
+        help="Semi-supervised sweep: keep labels on this class-stratified "
+             "fraction of train. The remaining rows stay in the pool and still "
+             "receive the JS consistency term, they are only excluded from the "
+             "focal term. 1.0 (default) is the fully supervised setting.",
+    )
     args = parser.parse_args()
 
     cfg = load_config(args.config)
+    # Tag the run with its label fraction BEFORE the seed suffix, matching the
+    # "<base>_lf<frac>_seed<N>" layout 12_semisup.py reads. Without this the
+    # sweep would reuse the main runs' experiment names and overwrite their
+    # checkpoints and metrics.
+    if args.label_fraction < 1.0:
+        cfg.experiment_name = f"{cfg.experiment_name}_lf{args.label_fraction:g}"
     if args.seed is not None:
         cfg.seed = args.seed
         cfg.experiment_name = f"{cfg.experiment_name}_seed{args.seed}"
@@ -194,6 +207,22 @@ def main():
         wandb.log({f"swap_yield_{k}": v for k, v in yield_stats.items()
                    if isinstance(v, (int, float))})
 
+    # Semi-supervised setting: unlike train.py, which drops the unlabelled rows
+    # because Model C and CDA cannot use them, CCI keeps the whole pool. Only the
+    # focal term is restricted to the labelled subset; the JS term still couples
+    # every text with its rewrites. That asymmetry is what the sweep measures.
+    label_mask = None
+    if args.label_fraction < 1.0:
+        mask = stratified_label_mask(train_labels, args.label_fraction, cfg.seed)
+        label_mask = mask.tolist()
+        logger.info(
+            "Label fraction %.2f: %d/%d train rows labelled (%d positives); "
+            "the remaining %d stay in the pool for the consistency term only.",
+            args.label_fraction, int(mask.sum()), len(mask),
+            int(sum(l for l, m in zip(train_labels, mask) if m)),
+            int((~mask).sum()),
+        )
+
     train_dataset = CounterfactualDataset(
         texts=train_texts,
         labels=train_labels,
@@ -204,6 +233,7 @@ def main():
         keyword_mask_prob=cfg.training.get("keyword_mask_prob", 0.0),
         keywords=list(cfg.data.get("keywords", [])) if cfg.data.get("keywords") else None,
         return_source_group=True,
+        label_mask=label_mask,
     )
     dev_dataset = AntisemitismDataset(
         texts=splits["dev"][cfg.data.text_column].tolist(),

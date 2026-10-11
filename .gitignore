@@ -1,0 +1,39 @@
+# Local environments and Python caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+*.egg-info/
+build/
+dist/
+
+# Machine-specific files and credentials
+.DS_Store
+.env
+.env.*
+!.env.example
+wandb/
+
+# Downloaded data and generated training artifacts
+/data/raw/
+/data/external/
+/data/processed/
+/results/checkpoints/
+/results/predictions/
+/results/metrics/
+**/cfr_cache/
+
+# LaTeX build intermediates (preserve existing PDFs and figures)
+*.aux
+*.log
+*.out
+*.toc
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
+*.synctex.gz

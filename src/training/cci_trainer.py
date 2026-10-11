@@ -131,10 +131,18 @@ class CCITrainer(Trainer):
             with torch.amp.autocast(
                 "cuda", dtype=self.autocast_dtype, enabled=self.autocast_enabled
             ):
+                # label_mask appears only in the semi-supervised setting, and the
+                # asymmetry it creates is the point of that experiment: the focal
+                # term sees the labelled rows, the JS term below sees every row.
+                # CCI therefore turns the unlabelled pool into signal that CDA
+                # structurally cannot use, since CDA needs a label to copy onto
+                # each swap. Absent the key, .get() returns None and the model
+                # takes the original fully supervised path.
                 outputs = self.model(
                     input_ids=batch["input_ids"],
                     attention_mask=batch["attention_mask"],
                     labels=batch["labels"],
+                    label_mask=batch.get("label_mask"),
                 )
                 focal_loss = outputs["loss"]
                 logits_orig = outputs["logits"]

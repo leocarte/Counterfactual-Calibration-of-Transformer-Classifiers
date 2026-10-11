@@ -27,13 +27,12 @@ seaborn>=0.13.0
 plotly>=5.18.0
 captum>=0.7.0           # Integrated Gradients attribution maps (scripts/eval_attribution.py)
 
-# LLM inference
-vllm>=0.3.0              # For fast LLM inference on cluster
-bitsandbytes>=0.42.0     # 4-bit quantization fallback
-
 # Testing
 pytest>=7.4.0
 
-# Notebooks
-jupyterlab>=4.0.0
-ipywidgets>=8.1.0
+# Optional LLM inference (install separately on compatible GPU systems):
+# python -m pip install "bitsandbytes>=0.42.0"
+# Cluster LLM jobs install vllm at runtime via rcp/submit_llm.sh.
+
+# Optional notebooks:
+# python -m pip install "jupyterlab>=4.0.0" "ipywidgets>=8.1.0"

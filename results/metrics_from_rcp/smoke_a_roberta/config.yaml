@@ -1,0 +1,69 @@
+seed: 42
+project_name: antisemitism-detection
+paths:
+  raw_data: data/raw/GoldStandard2024.csv
+  processed_dir: data/processed
+  results_dir: results
+  checkpoints_dir: results/checkpoints
+  predictions_dir: results/predictions
+  metrics_dir: results/metrics
+  figures_dir: results/figures
+data:
+  text_column: Text
+  label_column: Biased
+  keyword_column: Keyword
+  id_column: ID
+  train_ratio: 0.8
+  dev_ratio: 0.1
+  test_ratio: 0.1
+  max_length: 128
+  keywords:
+  - jews
+  - jewish
+  - israel
+  - israeli
+  - zionazi
+  - zionist
+  - kike
+  - kikes
+preprocessing:
+  mask_usernames: true
+  remove_urls: true
+  remove_hashtag_symbol: true
+  preserve_emojis: true
+  lowercase: false
+wandb:
+  project: ee559-antisemitism
+  entity: null
+  log_model: false
+experiment_name: smoke_a_roberta
+model:
+  name: roberta-base
+  num_labels: 2
+  dropout: 0.1
+  freeze_embeddings: false
+training:
+  epochs: 1
+  batch_size: 4
+  learning_rate: 2.0e-05
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  max_grad_norm: 1.0
+  precision: bf16
+  gradient_accumulation_steps: 4
+  loss_type: weighted_ce
+  class_weights:
+  - 1.0
+  - 4.79
+  patience: 1
+  metric_for_best_model: macro_f1
+  keyword_masking: false
+  keyword_mask_prob: 0.0
+evaluation:
+  metrics:
+  - macro_f1
+  - precision
+  - recall
+  - pr_auc
+  - ece
+  per_keyword: false

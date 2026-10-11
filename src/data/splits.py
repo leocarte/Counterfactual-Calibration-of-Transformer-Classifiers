@@ -62,10 +62,15 @@ def create_splits(
     train_idx = train_dev_idx[train_idx_rel]
     dev_idx = train_dev_idx[dev_idx_rel]
 
+    # Author usernames leave with the split. The column is never read (the
+    # only "username" logic in the tree is preprocessing's mask_usernames,
+    # which rewrites @handles inside the text), and an artefact that labels
+    # tweets antisemitic should not also redistribute who wrote them.
+    drop = [c for c in ("_strat_key", "Username") if c in df.columns]
     splits = {
-        "train": df.iloc[train_idx].drop(columns=["_strat_key"]).reset_index(drop=True),
-        "dev": df.iloc[dev_idx].drop(columns=["_strat_key"]).reset_index(drop=True),
-        "test": df.iloc[test_idx].drop(columns=["_strat_key"]).reset_index(drop=True),
+        "train": df.iloc[train_idx].drop(columns=drop).reset_index(drop=True),
+        "dev": df.iloc[dev_idx].drop(columns=drop).reset_index(drop=True),
+        "test": df.iloc[test_idx].drop(columns=drop).reset_index(drop=True),
     }
 
     # Log split statistics
@@ -93,3 +98,39 @@ def load_splits(processed_dir: str) -> dict[str, pd.DataFrame]:
         name: pd.read_csv(processed_path / f"{name}.csv")
         for name in ["train", "dev", "test"]
     }
+
+
+def stratified_label_mask(
+    labels: list[int] | np.ndarray,
+    fraction: float,
+    seed: int,
+) -> np.ndarray:
+    """Boolean mask selecting a class-stratified ``fraction`` of the rows.
+
+    Used by the semi-supervised sweep, where every method sees the SAME labelled
+    subset at a given (fraction, seed) and only CCI additionally exploits the
+    unlabelled remainder through its label-free consistency term.
+
+    Stratified rather than uniform because the corpus is 4.79:1 imbalanced: a
+    uniform draw at fraction 0.1 can leave a handful of positives, and the
+    resulting variance would swamp the effect being measured.
+
+    Rounding is per class with ``max(1, round(f * n_c))``, so no class is ever
+    emptied; at very small fractions this makes the realised fraction slightly
+    larger than requested, which the caller logs.
+    """
+    if not 0.0 < fraction <= 1.0:
+        raise ValueError(f"fraction must be in (0, 1], got {fraction}")
+
+    y = np.asarray(labels)
+    mask = np.zeros(len(y), dtype=bool)
+    if fraction == 1.0:
+        mask[:] = True
+        return mask
+
+    rng = np.random.default_rng(seed)
+    for c in np.unique(y):
+        idx = np.flatnonzero(y == c)
+        k = max(1, int(round(fraction * len(idx))))
+        mask[rng.choice(idx, size=min(k, len(idx)), replace=False)] = True
+    return mask

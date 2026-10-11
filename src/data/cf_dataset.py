@@ -7,6 +7,10 @@ padded ``(B, K_max, L)`` tensor with a boolean mask.
 
 Used by the CLP / CCI v2 trainers. The base ``AntisemitismDataset`` is
 unaffected — non-CLP training continues to use it directly.
+
+Also hosts :func:`expand_with_counterfactual_rows`, the static train-split
+expansion behind the CDA baseline (counterfactual data augmentation: swapped
+copies as extra labeled rows, no consistency loss).
 """
 from __future__ import annotations
 
@@ -48,6 +52,7 @@ class CounterfactualDataset(AntisemitismDataset):
         keyword_mask_prob: float = 0.3,
         keywords: Optional[list[str]] = None,
         return_source_group: bool = True,
+        label_mask: Optional[list[bool]] = None,
     ):
         super().__init__(
             texts=texts,
@@ -57,6 +62,7 @@ class CounterfactualDataset(AntisemitismDataset):
             keyword_masking=keyword_masking,
             keyword_mask_prob=keyword_mask_prob,
             keywords=keywords,
+            label_mask=label_mask,
         )
         self.swap_engine = swap_engine
         self.return_source_group = return_source_group
@@ -95,6 +101,63 @@ class CounterfactualDataset(AntisemitismDataset):
             )
 
         return item
+
+
+def expand_with_counterfactual_rows(
+    texts: list[str],
+    labels: list[int],
+    swap_engine: CounterfactualSwapEngine,
+    exclude_texts: Optional[set[str]] = None,
+) -> tuple[list[str], list[int]]:
+    """Statically expand a split with counterfactual copies (the CDA baseline).
+
+    Plain counterfactual data augmentation: every admissible identity swap of
+    a source row is appended as an additional labeled row, with the label
+    copied verbatim from the source. No pairing information is kept — the
+    result feeds the plain :class:`AntisemitismDataset` and the standard
+    :class:`~src.training.trainer.Trainer` (no consistency loss anywhere).
+
+    Call this on the TRAIN split only. Dev/test must stay un-augmented: the
+    model is always evaluated on real tweets, and the CFR/robustness metrics
+    generate their own swaps at evaluation time.
+
+    Parameters
+    ----------
+    texts, labels :
+        The source split as parallel lists.
+    swap_engine : CounterfactualSwapEngine
+        Pre-seeded engine; symmetry filtering happens inside it. Configure it
+        identically to the CLP/CCI trainers so CDA sees exactly the same
+        admissible-swap distribution as the consistency-loss methods.
+    exclude_texts : set[str], optional
+        Texts that must never enter the augmented split — pass the union of
+        dev and test texts. Guards against the corner case where a swapped
+        train tweet becomes character-identical to an evaluation tweet.
+
+    Returns
+    -------
+    (texts, labels)
+        New lists with the augmented rows appended after the originals.
+        Deterministic given a seeded engine. Swapped texts are deduplicated
+        against the originals and against each other.
+    """
+    if len(texts) != len(labels):
+        raise ValueError(
+            f"texts and labels length mismatch: {len(texts)} vs {len(labels)}"
+        )
+    exclude = exclude_texts or set()
+    seen = set(texts)  # never add a row whose text already exists in the split
+    aug_texts: list[str] = []
+    aug_labels: list[int] = []
+    for text, label in zip(texts, labels):
+        for pair in swap_engine.generate(text):
+            swap_text = pair.swap_text
+            if swap_text in seen or swap_text in exclude:
+                continue
+            seen.add(swap_text)
+            aug_texts.append(swap_text)
+            aug_labels.append(label)
+    return list(texts) + aug_texts, list(labels) + aug_labels
 
 
 def cf_collate_fn(batch: list[dict]) -> dict:
@@ -148,5 +211,10 @@ def cf_collate_fn(batch: list[dict]) -> dict:
 
     if "source_group_idx" in batch[0]:
         out["source_group_idx"] = torch.stack([b["source_group_idx"] for b in batch])
+
+    # Present only in the semi-supervised setting; when absent the batch keys are
+    # identical to the fully supervised path, so nothing downstream changes.
+    if "label_mask" in batch[0]:
+        out["label_mask"] = torch.stack([b["label_mask"] for b in batch])
 
     return out

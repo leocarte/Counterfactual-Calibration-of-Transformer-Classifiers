@@ -1,116 +1,152 @@
-# Antisemitism Detection in Social Media Text
+# Counterfactual Robustness and the Calibration Trap in Antisemitism Detection
 
-EE-559 Deep Learning mini-project, EPFL, Spring 2026.
+**EE-559 Deep Learning Project · EPFL · Spring 2026**
 
-> "Where Criticism Ends and Hate Begins: Fine-Tuned Transformers and a Counterfactual
-> Calibration-Invariance Loss for Antisemitism Detection in Social Media Text"
+A research project investigating whether text classifiers can detect antisemitism
+without relying on identity terms as shortcuts. We evaluate RoBERTa and DeBERTa
+models on classification quality, confidence calibration, and prediction stability
+under identity-token swaps.
 
-## Overview
+The main method, **Counterfactual Calibration Invariance (CCI v2)**, adds a
+Jensen–Shannon consistency loss between an original text and its counterfactual.
+A heuristic symmetry filter excludes swaps involving slurs or geopolitical-only
+references. The repository includes training, calibration, statistical analysis,
+and Integrated Gradients attribution workflows.
 
-We detect antisemitism in tweets (GoldStandard2024; Jikeli et al., 2024) and evaluate
-predictions along three axes: positive-class F1, group-conditional calibration error
-(ECE), and counterfactual stability under identity-token swaps.
+## Results
 
-The headline contribution is Counterfactual Calibration Invariance (CCI v2), a
-training-time loss penalising the Jensen-Shannon divergence between a tweet's prediction
-and its identity-swapped counterfactual. It cuts the hard counterfactual flip rate by
-49% / 55% / 73% on DeBERTa-v3-base, DeBERTa-v3-large, and RoBERTa-large, with F1 preserved
-or improved (0.72 best). We also report a tension between multicalibration and
-counterfactual invariance: post-hoc multicalibration lowers hard CFR by 8% but inflates
-soft CFR by 96%.
+Across six seeds, CCI v2 reduces the hard counterfactual flip rate by **48.9%** on
+DeBERTa-v3-base while improving positive-class F1 from **0.6597 to 0.6767**.
+The reduction also holds on DeBERTa-v3-large (**55.2%**) and RoBERTa-large
+(**72.9%**), relative to the same-architecture focal-loss and keyword-masking baseline.
 
-## Quick start
+| Backbone | Method | Positive-class F1 ↑ | ECE ↓ | Hard CFR ↓ |
+|---|---|---:|---:|---:|
+| DeBERTa-v3-base | Focal loss + keyword masking (Model C) | 0.6597 | 0.0772 | 0.0358 |
+| DeBERTa-v3-base | **CCI v2 (fixed T, JS)** | **0.6767** | 0.0981 | **0.0183** |
+| DeBERTa-v3-large | Focal loss + keyword masking | 0.7041 | 0.0966 | 0.0417 |
+| DeBERTa-v3-large | **CCI v2 (fixed T, JS)** | **0.7194** | 0.0986 | **0.0187** |
+| RoBERTa-large | Focal loss + keyword masking | 0.6894 | 0.0678 | 0.0465 |
+| RoBERTa-large | **CCI v2 (fixed T, JS)** | **0.6935** | 0.0766 | **0.0126** |
+
+Values are means from the saved [analysis report](analysis/direction1/REPORT.md),
+which includes standard deviations, group-level error rates, and significance tests.
+Percentage reductions above are calculated from the displayed means. ECE is expected
+calibration error; hard CFR is the fraction of counterfactual pairs whose predicted
+class changes at a 0.5 threshold, evaluated on a fixed 2,117-pair test manifest.
+
+The experiments also expose a trade-off: post-hoc multicalibration lowers Model C's
+ECE from 0.0772 to 0.0354, but raises soft CFR (L1) from 0.0322 to 0.0630.
+CCI improves counterfactual stability without consistently improving calibration
+or every group fairness metric. See the [paper (PDF)](paper/woah2026/woah2026_short.pdf) for methodology
+and limitations.
+
+## Getting started
+
+Run the following commands from the repository root. Python 3.10+ is required;
+a CUDA-capable GPU is recommended for training. Model and tokenizer weights are
+downloaded from Hugging Face on first use.
 
 ```bash
-# Setup
-pip install -r requirements.txt
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+```
 
-# The dataset (GoldStandard2024, CC BY 4.0) ships under data/raw/.
-# To refetch it from Zenodo instead, run: bash data/download.sh
+For Windows, activate the environment with `.venv\Scripts\activate`.
+The core installation covers transformer training, evaluation, and tests.
+Optional LLM inference and notebooks use additional dependencies:
+
+```bash
+# Quantized LLM inference; requires compatible GPU hardware
+python -m pip install "bitsandbytes>=0.42.0"
+
+# Cluster LLM jobs install vLLM at runtime; see rcp/submit_llm.sh
+# Optional notebooks
+python -m pip install "jupyterlab>=4.0.0" "ipywidgets>=8.1.0"
+```
+
+### Prepare the dataset
+
+Download GoldStandard2024 from the
+[dataset record](https://zenodo.org/records/14448399) and save the CSV as
+`data/raw/GoldStandard2024.csv`. Alternatively, use the existing download script
+with `wget` installed:
+
+```bash
+bash data/download.sh
 python scripts/preprocess_data.py
+```
 
-# Local training (single GPU)
-python scripts/train.py     --config configs/deberta_focal_mask.yaml   # Model C baseline
-python scripts/train_cci.py --config configs/cci_v2_fixed_js.yaml      # CCI v2 pivot
+The preprocessing pipeline cleans text, removes duplicate texts, and produces
+label- and keyword-stratified 80/10/10 train/dev/test splits. The reported test
+split contains 1,060 examples, including 187 positives.
 
-# Evaluation (after training)
+### Train and evaluate
+
+```bash
+# Strong baseline: DeBERTa-v3-base + focal loss + keyword masking
+python scripts/train.py --config configs/deberta_focal_mask.yaml --seed 42 --no-wandb
+
+# Main method: CCI v2 with fixed temperature and JS divergence
+python scripts/train_cci.py --config configs/cci_v2_fixed_js.yaml --seed 42 --no-wandb
+
+# Evaluate the checkpoint created by the command above
 python scripts/evaluate.py \
   --config configs/cci_v2_fixed_js.yaml \
-  --checkpoint results/checkpoints/cci_v2_fixed_js/seed42/best_model.pt
-
-# Run:ai cluster (EPFL RCP): the rcp/ directory holds the submit scaffold
-bash rcp/submit.sh <job_name> "python3 scripts/train_cci.py --config configs/cci_v2_fixed_js.yaml"
+  --checkpoint results/checkpoints/cci_v2_fixed_js_seed42/best_model.pt
 ```
 
-## Repository layout
+`--no-wandb` disables experiment tracking. Omit it to use Weights & Biases.
+Explicit seeds are appended to experiment names; checkpoints are saved under
+`results/checkpoints/<experiment>_seed<seed>/`. Repeat training with seeds
+42–47 to match the reported six-seed setup. The full counterfactual and statistical
+analysis follows the [analysis pipeline](analysis/direction1/README.md) and requires
+the trained checkpoints and cached predictions. Large training artifacts are
+stored outside the published repository; saved summaries and figures are included.
 
-```
-.
-├── src/                                importable library
-│   ├── data/
-│   │   ├── counterfactual_swap.py        identity-token swap engine (feeds CCI / CLP)
-│   │   ├── symmetry_classifier.py        heuristic filter for label-preserving swaps
-│   │   ├── identity_inventory.py         religiously-symmetric identity vocabulary
-│   │   ├── preprocessing.py              tweet cleaning + keyword masking
-│   │   ├── dataset.py / cf_dataset.py    torch datasets (plain / counterfactual-paired)
-│   │   ├── splits.py                     stratified train/dev/test splits
-│   │   └── keyword_masking.py            keyword-reliance flip-rate check
-│   ├── models/
-│   │   ├── transformer_classifier.py     HF encoder + classification head
-│   │   ├── temperature_head.py           per-group temperature head (CCI v2)
-│   │   ├── focal_loss.py                 focal loss (Model C)
-│   │   └── llm_prompter.py + prompts/    zero-/few-shot / guided-CoT LLM baselines
-│   ├── training/
-│   │   ├── trainer.py                    base fine-tuning loop
-│   │   ├── cci_loss.py / cci_trainer.py  CCI v2 contribution (JS pair-divergence)
-│   │   ├── clp_loss.py / clp_trainer.py  Davani CLP baseline
-│   │   ├── checkpoint_strategies.py      calibration bake-off strategies
-│   │   └── cci_diagnostics.py            temperature-shortcut kill-criterion
-│   ├── evaluation/                       metrics, significance (paired bootstrap),
-│   │                                     cross_dataset, robustness, error_analysis
-│   ├── calibration/                      post-hoc multicalibration
-│   └── utils/                            config (OmegaConf), seeding, logging
-├── scripts/                            CLI entry points
-│   ├── preprocess_data.py                build splits from the raw CSV
-│   ├── train.py / train_cci.py / train_clp.py    baselines / CCI v2 / Davani
-│   ├── run_llm.py                        LLM inference (Llama / Mistral / Qwen)
-│   ├── evaluate.py / apply_multicalibration.py   full eval + post-hoc calibration
-│   ├── aggregate_*.py / threshold_sweep_cross_dataset.py / prepare_cross_datasets.py
-│   └── eval_attribution.py                per-checkpoint integrated-gradients
-├── analysis/                           checkpoints -> paper numbers and figures (flat)
-│   ├── 01_…_09_*.py                      CFR pipeline: manifest, forward pass, CFR/FPED-FNED/ECE, significance
-│   ├── _utils.py                         shared pipeline helpers
-│   ├── REPORT.md                         generated results report (CFR / ECE / FPED-FNED / significance numbers)
-│   ├── PIPELINE.md                       pipeline documentation
-│   └── attribution_analysis.py           integrated-gradients interpretability
-├── configs/                            51 YAML experiment configs 
-├── rcp/                                EPFL Run:ai cluster scaffold
-│   ├── Dockerfile / requirements.txt / build_and_push.sh
-│   ├── submit.sh / _runner.sh             core submit wrapper + container entry point
-│   └── submit_*.sh                        per-experiment launchers (cci_v2, davani, llm, ...)
-├── tests/                              16 pytest files (losses, swaps, metrics, calibration, ...)
-├── data/
-│   ├── raw/GoldStandard2024.csv          dataset (CC BY 4.0)
-│   ├── external/                         HateXplain / ToxiGen cross-dataset subsets
-│   └── download.sh                       refetch from Zenodo
-└── deliverables/                         final submission deliverables
-    ├── poster.pdf                        conference-style poster
-    ├── report.pdf                        3-page paper (compiled PDF)
-    └── screencast.mp4                    project video / screencast
+### Run tests
+
+```bash
+python -m pytest -q
 ```
 
-Root files: `README.md`, `LICENSE` (MIT), `requirements.txt`, `pyproject.toml`, `setup.cfg`.
+The tests cover counterfactual swaps, symmetry filtering, loss functions,
+calibration, metrics, dataset handling, and checkpoint behavior. Tokenizer-based
+tests download `bert-base-uncased` on first use.
 
-The `deliverables/` directory collects the final deliverables for submission: the poster
-(`poster.pdf`), the paper (`report.pdf`), and the project screencast.
+## Repository guide
 
-## Dataset
+| Path | Contents |
+|---|---|
+| [src/](src/) | Data processing, models, training, calibration, evaluation, and utilities |
+| [scripts/](scripts/) | Training, evaluation, LLM inference, attribution, and plotting entry points |
+| [configs/](configs/README.md) | YAML experiment configurations and ablations |
+| [tests/](tests/) | Automated tests |
+| [analysis/](analysis/direction1/README.md) | Counterfactual analysis, significance testing, and saved report |
+| [results/](results/) | Saved experiment summaries and figures |
+| [paper/](paper/) | [Research paper (PDF)](paper/woah2026/woah2026_short.pdf), LaTeX sources, and figures |
+| [poster/](poster/) | Research poster and method diagrams |
+| [rcp/](rcp/) | EPFL cluster submission and runtime scripts |
+| [docs/](docs/README.md) | Codebase guide and research workflow documentation |
+| [archive/](archive/README.md) | Historical plotting and cluster helper scripts |
 
-GoldStandard2024 (Jikeli et al., 2024): 11,311 English tweets annotated for antisemitism
-under the IHRA Working Definition. Test split: 1,060 examples, 187 positive. Keyword
-stratification: Jews 41.4%, Israel 41.4%, Kikes 8.6%, ZioNazi 8.6%. Licensed CC BY 4.0.
-Source: https://zenodo.org/records/14448399
+## Authors and citation
+
+Giacomo Case, Yasmin Chaqor, and Leonardo Cartesegna — EPFL EE-559 Deep Learning.
+
+```bibtex
+@misc{case2026antisemitism,
+  title={Where Criticism Ends and Hate Begins: Fine-Tuned Transformers and a
+         Counterfactual Calibration-Invariance Loss for Antisemitism Detection},
+  author={Case, Giacomo and Chaqor, Yasmin and Cartesegna, Leonardo},
+  year={2026},
+  institution={EPFL EE-559 Deep Learning}
+}
+```
 
 ## License
 
-Code: MIT. Dataset (GoldStandard2024): CC BY 4.0.
+Code is released under the [MIT License](LICENSE). GoldStandard2024 is distributed
+separately under CC BY 4.0; consult its dataset record for attribution. Results are
+specific to English Twitter/X text and the dataset's IHRA-based annotations.

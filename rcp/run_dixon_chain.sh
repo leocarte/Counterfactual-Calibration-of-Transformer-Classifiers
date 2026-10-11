@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Container-side chain: rerun the CFR-evaluation post-processing after the
+# Container-side chain: rerun the Direction-1 post-processing after the
 # Dixon FPED/FNED fix (2026-05-18).
 #
 # This is the entry point for the CPU-only `rcp/submit.sh dixon-chain`
@@ -19,7 +19,7 @@
 #   5. 07_build_main_table.py     paper-ready main results markdown
 #                                 -> main_table.md
 #   6. 09_write_report.py         REPORT.md rollup
-#                                 -> analysis/REPORT.md
+#                                 -> analysis/direction1/REPORT.md
 #
 # Wall clock: ~5-10 minutes total on any CPU node.
 #
@@ -37,37 +37,37 @@ echo "[dixon-chain] python  : $(which python3) ($(python3 --version))"
 echo ""
 
 echo "===== Step 1/6: 03_compute_cfr.py ====="
-python3 analysis/03_compute_cfr.py
+python3 analysis/direction1/03_compute_cfr.py
 echo ""
 
 echo "===== Step 2/6: 04_compute_fped_fned.py (Dixon rebuild) ====="
-python3 analysis/04_compute_fped_fned.py
+python3 analysis/direction1/04_compute_fped_fned.py
 echo ""
 
 echo "===== Step 3/6: 05_compute_group_ece.py ====="
-python3 analysis/05_compute_group_ece.py
+python3 analysis/direction1/05_compute_group_ece.py
 echo ""
 
 echo "===== Step 4/6: 06_run_significance_suite.py ====="
-python3 analysis/06_run_significance_suite.py
+python3 analysis/direction1/06_run_significance_suite.py
 echo ""
 
 echo "===== Step 5/6: 07_build_main_table.py ====="
-python3 analysis/07_build_main_table.py
+python3 analysis/direction1/07_build_main_table.py
 echo ""
 
 echo "===== Step 6/6: 09_write_report.py ====="
-python3 analysis/09_write_report.py
+python3 analysis/direction1/09_write_report.py
 echo ""
 
 echo "[dixon-chain] all six scripts succeeded."
 echo "[dixon-chain] Updated artifacts:"
-echo "  analysis/results/per_checkpoint_cfr.parquet"
-echo "  analysis/results/per_checkpoint_fped_fned_dixon.parquet"
-echo "  analysis/results/fped_fned_summary.csv"
-echo "  analysis/results/main_table_fped.md"
-echo "  analysis/results/per_checkpoint_group_ece.parquet"
-echo "  analysis/results/significance_tests.csv"
-echo "  analysis/results/significance_summary.md"
-echo "  analysis/results/main_table.md"
-echo "  analysis/REPORT.md"
+echo "  analysis/direction1/results/per_checkpoint_cfr.parquet"
+echo "  analysis/direction1/results/per_checkpoint_fped_fned_dixon.parquet"
+echo "  analysis/direction1/results/fped_fned_summary.csv"
+echo "  analysis/direction1/results/main_table_fped.md"
+echo "  analysis/direction1/results/per_checkpoint_group_ece.parquet"
+echo "  analysis/direction1/results/significance_tests.csv"
+echo "  analysis/direction1/results/significance_summary.md"
+echo "  analysis/direction1/results/main_table.md"
+echo "  analysis/direction1/REPORT.md"

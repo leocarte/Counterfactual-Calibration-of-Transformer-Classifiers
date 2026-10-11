@@ -35,7 +35,7 @@ set -euo pipefail
 
 JOB_NAME="${1:?Usage: bash rcp/submit.sh <job_name> \"<python_cmd>\" [node_pool]}"
 PY_CMD="${2:?Usage: bash rcp/submit.sh <job_name> \"<python_cmd>\" [node_pool]}"
-NODE_POOL="${3:-a100-40g}"
+NODE_POOL="${3:-default}"
 
 RCP_USERNAME="${RCP_USERNAME:-$(whoami)}"
 RCP_UID="${RCP_UID:-$(id -u)}"
@@ -51,12 +51,20 @@ RUNAI_PROJECT="${RUNAI_PROJECT:-course-ee-559-${RCP_USERNAME}}"
 # Auto-cleanup of finished jobs (G1) — runai removes the job 168h (1 week) after
 # completion to keep `runai list` uncluttered. Override with AUTO_DELETE=24h etc.
 AUTO_DELETE="${AUTO_DELETE:-168h}"
-# Backoff (G2) — by default Run:ai retries failed pod-creation up to 6x before
-# marking the job Failed. Cap at 1 so a bad commit fails fast instead of
-# burning through retries.
-BACKOFF_LIMIT="${BACKOFF_LIMIT:-1}"
-# NB: do NOT set --working-dir on `runai submit`; it causes a permission-denied
-# STARTERROR ("error during container init: mkdir ...: permission denied").
+# Backoff (G2) — Run:ai recreates the pod up to BACKOFF_LIMIT times on failure.
+# Default 6: the shared `default` pool races on GPU admission
+# ([UnexpectedAdmissionError] "Available: 0", seen 2026-06-13) and a limit of 1
+# killed perfectly good jobs after just 2 tries. 6 rides through the transient
+# races. Override BACKOFF_LIMIT=1 when testing a NEW commit, so a real bug dies
+# fast instead of burning 7 identical STARTERROR pods (the 2026-04-23 footgun).
+BACKOFF_LIMIT="${BACKOFF_LIMIT:-6}"
+# NB: do NOT set --working-dir on `runai submit`. We tried (G3 hardening,
+# 2026-04-29) and it reintroduced the permission-denied STARTERROR we had
+# already fixed by removing WORKDIR from the Dockerfile in April:
+#
+#   error during container init: mkdir /home/case/antisemitism-detection:
+#   permission denied
+#
 # runc applies --working-dir during container init, BEFORE the home PVC
 # bind-mount is usable by the --run-as-uid user, so it tries (and fails) to
 # mkdir the path on the bare image filesystem. _runner.sh cds explicitly
@@ -95,9 +103,11 @@ fi
 # CLI version doesn't accept this command form, we don't want to fail the
 # whole submission — silently fall back to the explicit flag.
 #
-# Always set the project rather than probe-and-compare: `runai config project`
-# with no argument exits non-zero on CLIs that require an argument, which under
-# `set -euo pipefail` would abort the submit. Setting unconditionally avoids it.
+# An earlier version of G6 tried to first READ the current default via
+# `runai config project` (no arg) and only re-pin on mismatch; that probe
+# exits non-zero on runai CLIs that require an argument for `config
+# project`, and `set -euo pipefail` then killed submit_cross_dataset.sh
+# after only its first === header. Avoid that footgun: just always set.
 runai config project "${RUNAI_PROJECT}" >/dev/null 2>&1 || true
 
 # Forward HF_TOKEN if set (required for gated Llama/Mistral checkpoints).

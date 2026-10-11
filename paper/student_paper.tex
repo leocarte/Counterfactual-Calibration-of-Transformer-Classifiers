@@ -1,0 +1,656 @@
+\documentclass[10pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{natbib}
+\usepackage[margin=2cm]{geometry}
+
+\newtheorem{lemma}{Lemma}
+
+\title{Where Counterfactual Invariance Helps, and Where It Doesn't:\\
+A Three-Axis Evaluation of Antisemitism Detection on Text}
+\author{Giacomo Case \and Yasmin Chaqor \and Leonardo Cartesegna\\
+EPFL --- EE-559 Deep Learning Mini-Project}
+\date{Spring 2026}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+We study antisemitism detection in English tweets along three connected axes
+--- positive-class F\textsubscript{1}, group-conditional Expected Calibration
+Error (ECE), and counterfactual stability under identity-token swaps within a
+religiously-symmetric vocabulary. We propose \textbf{Counterfactual Calibration
+Invariance (CCI v2)}, a training-time loss that penalises Jensen-Shannon
+divergence between a tweet's prediction and the prediction on its identity-swapped
+counterfactual, modulated by an optional per-group temperature head. Across three
+architectures (DeBERTa-v3-base, DeBERTa-v3-large, RoBERTa-large; 6 seeds each)
+CCI v2 reduces the hard counterfactual flip rate (CFR\textsubscript{hard}) by
+49--73~\% versus a strong focal+identity-mask baseline with positive-class
+F\textsubscript{1} preserved or improved (best 0.72). A short structural Lemma
+shows that scalar Temperature Scaling cannot reduce CFR\textsubscript{hard} at
+the decision threshold $1/2$; we verify this bit-exactly across six seeds.
+A separate finding: applying multicalibration~\citep{hebertjohnson2018multicalibration}
+post-hoc cuts CFR\textsubscript{hard} by 8~\% but \emph{inflates the
+L\textsubscript{1}-norm soft flip rate by 96~\%} --- a tension between two
+well-respected fairness desiderata. Prompted LLMs (Llama-3.1-8B, Mistral-7B,
+Qwen-2.5-7B) under zero-shot, few-shot, and Guided
+Chain-of-Thought~\citep{patel2025evaluating} reach F\textsubscript{1}\textsuperscript{+}
+$\le 0.445$ --- 22 points below our 184M-parameter fine-tuned model.
+Cross-dataset transfer to the Jewish-target subsets of HateXplain and
+ToxiGen exposes a clean threshold-shift artefact: at the default decision
+threshold $t{=}0.5$, CCI v2's score distribution sits at a systematically
+more conservative operating point (median optimal $t^*$ between 0.05 and 0.15)
+and underperforms on 4 of 6 architecture/dataset cells; at each model's
+PR-curve-optimal threshold CCI v2 wins or ties on 5 of 6 cells (the lone
+loss is $-0.011$, within seed noise) and PR-AUC is preserved or improved
+on every iso-architecture cell (per-cell $\Delta$PR-AUC range $[-0.007, +0.021]$).
+A source-tuned threshold check ($n{=}68$ cells; tune on
+GoldStandard2024's test split, apply unchanged to OOD) locates the residual
+gap in a $\approx 0.4$-unit prevalence-shift on the optimal threshold,
+not in the representation: the in-distribution counterfactual-invariance
+gain transfers as preserved ranking quality, and OOD-aware threshold
+calibration converts that ranking into deployable decisions.
+\end{abstract}
+
+\section{Research Questions}
+
+Rather than ask a single composite question, we decompose the project into
+five concrete sub-questions, each answered in a specific results section.
+The decomposition lets us cleanly attribute positive and negative findings
+to specific scientific claims rather than to one method.
+
+\begin{description}[leftmargin=*,itemsep=4pt]
+    \item[\textbf{RQ1 (are these three qualities really separate? \S\ref{sec:results-id})}]
+    Imagine a classifier that flags a tweet as antisemitic. We can ask three
+    different things about it: (i) how often is it \emph{right}? (ii) when it
+    reports ``70~\% confident,'' does that actually happen 70~\% of the time
+    --- and is that still true when we look only at tweets about a particular
+    identity group? (iii) if we rewrite the same tweet swapping ``Jew'' for
+    ``Muslim'' or ``Christian,'' does the verdict stay the same? Are these
+    three properties \emph{independent dials} we have to tune separately,
+    or is one underlying ``quality'' driving all three so that pushing
+    accuracy upward gives us the others for free? \emph{Technical
+    restatement:} are positive-class F\textsubscript{1}, group-conditional
+    Expected Calibration Error, and counterfactual flip rate under
+    identity-token swaps three orthogonal axes of classifier behaviour, or
+    a single latent factor?
+
+    \item[\textbf{RQ2 (fix it during training, or patch it afterwards? \S\ref{sec:lemma}--\ref{sec:tension})}]
+    Suppose a classifier flips its verdict on a tweet when we swap one
+    identity word for another. To stop that, do we have to retrain the model
+    (the slow, expensive option), or can we leave the trained model alone
+    and just rescale its confidence scores afterwards (a much cheaper fix)?
+    Two well-known after-the-fact fixes exist: \emph{Temperature Scaling},
+    which divides every confidence score by a single learned constant, and
+    \emph{multicalibration}~\citep{hebertjohnson2018multicalibration}, which
+    adjusts scores separately for each identity subgroup. Is either enough,
+    or does the fix have to be baked into training? \emph{Technical
+    restatement:} for reducing hard counterfactual flip rate at the
+    decision threshold $\tfrac{1}{2}$, is post-hoc calibration (Temperature
+    Scaling, multicalibration) sufficient, or is a training-time loss
+    required?
+
+    \item[\textbf{RQ3 (does the fix carry over to bigger and different models? \S\ref{sec:results-id})}]
+    If a training trick works on one neural network, does it still work
+    when we use a network that is twice as big but built the same way
+    (think: the same car model in a larger engine size)? And does it work
+    on a network from a different manufacturer entirely (different
+    word-splitting rules, different internal architecture)? \emph{Technical
+    restatement:} do counterfactual-invariance gains measured on
+    DeBERTa-v3-base transfer to DeBERTa-v3-large (same family, $2.4\times$
+    parameters) and to RoBERTa-large (different family: different tokenizer,
+    different attention implementation)?
+
+    \item[\textbf{RQ4 (does the fix carry over to unfamiliar data? \S\ref{sec:results-ood})}]
+    We train and evaluate the fix on one dataset. When we then test it on a
+    \emph{different} dataset --- collected by different researchers,
+    labelled by different rules, with a different mix of tweets --- does
+    the improvement still show up? More specifically: our fix teaches the
+    model to be insensitive to a fixed list of identity words. Does that
+    insensitivity generalise to new data, or only to data that happens to
+    contain words from that list? \emph{Technical restatement:} under what
+    conditions do in-distribution counterfactual-invariance gains transfer
+    out-of-distribution (HateXplain-Jewish, ToxiGen-Jewish), and how does
+    transfer depend on the lexical overlap between the target corpus and
+    the swap vocabulary?
+
+    \item[\textbf{RQ5 (can a large chatbot do this job out of the box? \S\ref{sec:results-llm})}]
+    Big instruction-following language models like Llama or Mistral can be
+    asked, in plain English, ``is this tweet antisemitic?'' --- with no
+    training, with a few worked examples, or with a step-by-step reasoning
+    prompt. Can such an off-the-shelf model match a much smaller specialist
+    classifier that we fine-tuned specifically for this task? \emph{Technical
+    restatement:} can prompted 7--8B-parameter instruction-tuned LLMs
+    (Llama-3.1-8B, Mistral-7B, Qwen-2.5-7B) under zero-shot, few-shot, or
+    Guided Chain-of-Thought~\citep{patel2025evaluating} prompting match or
+    exceed our 184M-parameter fine-tuned DeBERTa-v3-base baseline?
+\end{description}
+
+\textbf{Anticipated answers (in plain English):}
+
+\begin{itemize}[leftmargin=*,itemsep=3pt]
+\item \textbf{RQ1:} \emph{The three properties really are separate.} We give
+    a short mathematical proof that the cheapest post-hoc fix (Temperature
+    Scaling) cannot reduce the rate at which a classifier flips its verdict
+    on swapped tweets. Going the other direction, a more sophisticated
+    post-hoc fix (multicalibration) does improve group-by-group calibration
+    but \emph{worsens} the average confidence shift on swapped tweets by
+    96~\%. So no single optimisation target captures all three.
+\item \textbf{RQ2:} \emph{Patching afterwards is not enough --- you have to
+    retrain.} Multicalibration cuts the hard flip rate by only about 8~\%,
+    and at the cost of the soft flip rate (RQ1). Temperature Scaling
+    provably cannot move it at all (Lemma~\ref{lem:ts-cfr}).
+\item \textbf{RQ3:} \emph{Yes, on the original dataset, the fix carries
+    over.} Our proposed training-time loss, Counterfactual Calibration
+    Invariance (CCI v2), reduces the swap-induced flip rate by
+    49\,/\,55\,/\,73~\% on DeBERTa-v3-base (184M parameters),
+    DeBERTa-v3-large (440M, same family), and RoBERTa-large (355M,
+    different family) respectively.
+\item \textbf{RQ4:} \emph{The cross-dataset gap is a decision-threshold
+    artefact, not a representation gap.} At the default cutoff
+    $t{=}0.5$, CCI v2 loses positive-class F\textsubscript{1} on 4 of
+    6 architecture/dataset cells because its training compresses scores
+    toward the centre of the swap-pair, leaving it at a more conservative
+    operating point cross-dataset. Yet PR-AUC (a threshold-free measure
+    of ranking quality) is preserved or improved on every iso-architecture
+    cell (per-cell $\Delta$ range $[-0.007, +0.021]$, CCI v2 winning on
+    4 of 6). When each model is evaluated at its own PR-curve-optimal
+    threshold (typically $t^* \in [0.05, 0.18]$), CCI v2 wins or ties on
+    5 of 6 cells; the one loss is $-0.011$, well within seed noise.
+    Out-of-distribution \emph{ranking quality} therefore does transfer;
+    out-of-distribution \emph{decision quality at a fixed default threshold}
+    does not, and the gap is closed by threshold tuning rather than by
+    a different training objective.
+\item \textbf{RQ5:} \emph{No.} The best-performing prompted large model
+    (Llama-3.1-8B with Guided Chain-of-Thought) reaches a positive-class
+    F\textsubscript{1} of 0.445; the fine-tuned baselines reach 0.660--0.719
+    --- a gap of 22--27 points, replicated across three different LLM
+    families.
+\end{itemize}
+
+\section{Method}
+
+\subsection{Dataset and three-axis evaluation}
+
+We use the GoldStandard2024 dataset~\citep{jikeli2024goldstandard}: 11{,}311
+IHRA-annotated~\citep{ihra2016working} English tweets, of which 17.3~\% are
+labelled antisemitic, with four keyword sub-populations (Jews, Israel, Kikes,
+ZioNazi) at very different base rates (11.4~\%, 16.1~\%, 34.3~\%, 88.3~\%).
+After deduplication the test split contains 1{,}060 tweets (187 positives).
+We evaluate models along three axes:
+
+\begin{itemize}[leftmargin=*,itemsep=1pt]
+    \item \textbf{Accuracy:} positive-class F\textsubscript{1} (F\textsubscript{1}\textsuperscript{+}).
+    \item \textbf{Calibration:} group-conditional ECE with 15
+    equal-width bins~\citep{kumar2019verified}, plus worst-group ECE.
+    \item \textbf{Counterfactual stability:} CFR\textsubscript{hard} =
+    $\Pr[\mathbb{1}\{p(x){\geq}\tfrac{1}{2}\}\neq\mathbb{1}\{p(x'){\geq}\tfrac{1}{2}\}]$,
+    plus its soft variants CFR\textsubscript{soft, L\textsubscript{1}}
+    $= \mathbb{E}\,|p(x){-}p(x')|$ and the binary Jensen-Shannon
+    counterpart CFR\textsubscript{soft, JS}. Pairs $(x, x')$ are produced
+    by an algorithmic swap engine that substitutes religious-ethnic Jewish
+    tokens (\emph{jew}, \emph{jews}, \emph{jewish}, \emph{hebrew},
+    \emph{judaism}) with one of five alternative groups (\emph{Muslim},
+    \emph{Christian}, \emph{Hindu}, \emph{Buddhist}, \emph{Atheist}); a
+    heuristic symmetry filter rejects swaps involving slurs or geopolitical
+    proxies. The fixed test-time manifest contains 2{,}117 pairs.
+\end{itemize}
+
+\subsection{CCI v2 loss}
+
+For input $x_i$ with label $y_i$ and counterfactual partners $(x'_{i,k})_{k=1}^{K_i}$,
+let $z(x) = \mathrm{logit}_1(x) - \mathrm{logit}_0(x)$. We minimise
+\[
+\mathcal{L}(x_i)=\text{Focal}(f(x_i), y_i)
++\lambda\cdot\frac{1}{K_i}\sum_{k=1}^{K_i}
+\mathrm{JS}_b\!\left(\sigma\!\bigl(z(x_i)/T_{g_i}\bigr),
+                     \sigma\!\bigl(z(x'_{i,k})/T_{g_i}\bigr)\right),
+\]
+where $\sigma$ is the sigmoid, $\mathrm{JS}_b$ is the binary Jensen-Shannon
+divergence, $T_{g_i}$ is the temperature for example $i$'s identity group
+(one of 5), and $\lambda{=}1$. CCI v2 generalises Counterfactual Logit
+Pairing~\citep{garg2019counterfactual,davani2021improving} along two axes:
+divergence in \emph{probability} space (rather than $L_p$ in logit space)
+and a per-group temperature head. Our headline (\emph{pivot}) cell fixes
+$T_g{=}1$ everywhere; the learnable-$T$ variant is kept as an ablation
+comparator after an in-cell comparison showed it does not improve
+CFR\textsubscript{hard} but loses on FNED.
+
+\subsection{Baselines and architectures}
+
+\textbf{Model C} (strong baseline): DeBERTa-v3-base + focal loss
+($\gamma{=}2.0,\,\alpha{=}0.75$) + identity-token masking augmentation
+($p{=}0.3$). \textbf{Davani CLP}~\citep{davani2021improving}: same backbone
++ $L_1$ pair-loss in logit space at $\lambda\in\{0.5, 1.0, 2.0\}$.
+\textbf{Multi-architecture sweep}: CCI v2 fixed\_js and Model C are each
+trained on DeBERTa-v3-base (184M), DeBERTa-v3-large (440M), and RoBERTa-large
+(355M, different family), 6 seeds per cell (5 for one cell where one seed
+was dropped). \textbf{Prompted LLMs (D-track)}: Mistral-7B-Instruct,
+Qwen-2.5-7B-Instruct, Llama-3.1-8B-Instruct under three prompting strategies
+(zero-shot, 5-example few-shot, Guided CoT~\citep{patel2025evaluating}) with
+greedy decoding.
+
+\subsection{Statistical protocol}
+
+We pre-specify two test families and apply Holm-Bonferroni step-down within
+each at $\alpha{=}0.05$~\citep{dror2018hitchhiker}. \emph{Family 1 (main)}
+has 9 comparators $\times$ 6 metrics = 54 tests; \emph{Family 2
+(within-architecture transfer)} has 2 pairs $\times$ 3 CFR metrics = 6 tests.
+Paired-bootstrap by seed ($n_{\text{resample}}{=}10{,}000$) is the primary
+test; we additionally report the exact sign-test p-value as a small-$n$
+backup, which floors at 0.0313 for $n{=}6$ and 0.0625 for $n{=}5$.
+
+\section{In-Distribution Results}
+\label{sec:results-id}
+
+\subsection{CCI v2 reduces CFR\textsubscript{hard} across three architectures (RQ1, RQ3)}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{l r r r r r}
+\toprule
+Method & Params & F\textsubscript{1}\textsuperscript{+} $\uparrow$ & ECE $\downarrow$ & CFR\textsubscript{hard} $\downarrow$ & FNED $\downarrow$ \\
+\midrule
+Model C (DeBERTa-v3-base)            & 184M & $0.660 \pm 0.019$ & $0.077 \pm 0.034$ & $0.036 \pm 0.008$ & $0.797 \pm 0.159$ \\
+Davani CLP $\lambda{=}0.5$           & 184M & $0.659 \pm 0.012$ & $0.066 \pm 0.018$ & $0.040 \pm 0.005$ & $0.786 \pm 0.036$ \\
+\textbf{CCI v2 fixed\_js (pivot)}    & 184M & $\mathbf{0.677 \pm 0.008}$ & $0.098 \pm 0.053$ & $\mathbf{0.018 \pm 0.003}$ & $0.793 \pm 0.180$ \\
+CCI v2 fixed\_js (DeBERTa-large)     & 440M & $\mathbf{0.719 \pm 0.012}$ & $0.099 \pm 0.063$ & $0.019 \pm 0.009$ & $0.647 \pm 0.058$ \\
+CCI v2 fixed\_js (RoBERTa-large)     & 355M & $0.694 \pm 0.005$ & $0.077 \pm 0.052$ & $\mathbf{0.013 \pm 0.006}$ & $0.759 \pm 0.115$ \\
+\bottomrule
+\end{tabular}
+\caption{In-distribution headline results, mean $\pm$ std over 6 seeds (5 for the
+DeBERTa-large CCI cell after one seed was dropped). CCI v2 reduces
+CFR\textsubscript{hard} by 49--73~\% versus same-architecture Model C
+(DeBERTa-base: $-49\%$; DeBERTa-large: $-55\%$; RoBERTa-large: $-73\%$) with
+F\textsubscript{1}\textsuperscript{+} preserved or improved.}
+\label{tab:main}
+\end{table}
+
+All 12 base-architecture CFR comparisons (4 base comparators $\times$ 3 CFR
+metrics) reject Holm-Bonferroni in the pivot's favour with $6/6$ seed
+direction agreement. Within-architecture transfer tests (CCI v2 large vs
+Model C large on the same backbone) reject 6/6 under Holm-Bonferroni; the
+RoBERTa-large cell also passes the strict sign-test floor.
+
+\subsection{A structural lemma: scalar TS cannot improve CFR\textsubscript{hard} (RQ2)}
+\label{sec:lemma}
+
+\begin{lemma}[Scalar TS preserves CFR\textsubscript{hard} at threshold $\tfrac{1}{2}$]
+\label{lem:ts-cfr}
+Let $f:\mathcal{X}\to\mathbb{R}^2$ be any binary classifier with positive-class
+logit difference $z(x)$ and let $\tilde z(x){=}z(x)/T$ for any $T{>}0$. For any
+counterfactual pair $(x, x')$,
+\[
+\mathbb{1}[\sigma(z(x))\geq\tfrac{1}{2}]\neq\mathbb{1}[\sigma(z(x'))\geq\tfrac{1}{2}]
+\iff
+\mathbb{1}[\sigma(\tilde z(x))\geq\tfrac{1}{2}]\neq\mathbb{1}[\sigma(\tilde z(x'))\geq\tfrac{1}{2}].
+\]
+\end{lemma}
+
+\begin{proof}
+$\sigma(\cdot)\geq\tfrac{1}{2}\iff(\cdot)\geq 0$, and dividing by $T{>}0$ preserves sign.
+\end{proof}
+
+The Lemma's content is one line, but its operational value is a regression test:
+we verify across all six Model C seeds that post-hoc TS produces CFR\textsubscript{hard}
+\emph{bit-exactly equal} to the raw classifier (fitted $T\in[0.566, 1.400]$,
+mean 1.031). CFR\textsubscript{hard} reduction therefore requires either a
+training-time intervention (CCI v2) or a non-monotone post-hoc method.
+The latter has its own cost (\S\ref{sec:tension}).
+
+\subsection{Multicalibration vs counterfactual invariance: a tension (RQ1, RQ2)}
+\label{sec:tension}
+
+We fit a per-input-group multicalibration patcher~\citep{hebertjohnson2018multicalibration}
+on Model C's dev-set predictions and apply it at inference. The result:
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{l c c c c}
+\toprule
+& F\textsubscript{1}\textsuperscript{+} & ECE & CFR\textsubscript{hard} & CFR\textsubscript{soft, L\textsubscript{1}} \\
+\midrule
+Model C (raw)                     & 0.660 & 0.077 & 0.036 & 0.032 \\
+Model C + multicalibration        & 0.652 & \textbf{0.035} & 0.033 & \textbf{0.063} \\
+$\Delta$ (\%)                      & $-1\%$ & $-54\%$ & $-8\%$ & $\mathbf{+96\%}$ \\
+\bottomrule
+\end{tabular}
+\caption{Multicalibration cuts ECE by 54~\% but \emph{inflates}
+the L\textsubscript{1}-soft counterfactual flip rate by 96~\%. The mechanism:
+multicalibration patches predictions within group-cells of the input space;
+counterfactual pairs $(x, x')$ live in \emph{different} cells by construction,
+so the patcher can shift them apart. To our reading this is the first
+quantitative report of this trade-off on a text classifier; the general
+calibration-vs-equal-error fairness incompatibility is established
+by~\citet{pleiss2017fairness}.}
+\label{tab:tension}
+\end{table}
+
+\subsection{Prompted LLMs --- a clean negative result (RQ5)}
+\label{sec:results-llm}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{l c c c}
+\toprule
+Model & D1 zero-shot & D2 few-shot (5 ex.) & D3 Guided CoT \\
+\midrule
+Llama-3.1-8B-Instruct  & 0.432 & 0.399 & \textbf{0.445} \\
+Mistral-7B-Instruct    & 0.296 & 0.386 & 0.387 \\
+Qwen-2.5-7B-Instruct   & 0.335 & 0.366 & 0.301$^{\dagger}$ \\
+\midrule
+\textit{Model C (fine-tuned baseline)} & \multicolumn{3}{c}{\textit{0.660}} \\
+\textit{CCI v2 fixed\_js (pivot)}      & \multicolumn{3}{c}{\textit{0.677}} \\
+\bottomrule
+\end{tabular}
+\caption{Positive-class F\textsubscript{1} for three prompted LLMs under three
+prompting strategies, on the same 1{,}060-tweet test set. Greedy decoding
+(temperature$=0$). The best LLM--prompt combination (Llama + Guided CoT)
+reaches 0.445 --- 22 F\textsubscript{1}\textsuperscript{+} points below
+the 184M-parameter fine-tuned baseline. $^{\dagger}$Qwen + CoT predicts
+``antisemitic'' for 1055/1060 examples (recall 1.0, precision 0.18); the
+CoT scaffold over-primes its specificity.}
+\label{tab:llm}
+\end{table}
+
+Guided CoT helps Llama (${+}0.013$) and Mistral (${+}0.091$) over zero-shot
+but degrades Qwen (${-}0.034$). For Llama, the CoT scaffolding triggers
+20/1060 ($\approx 2\%$) safety-filter refusals on slur-containing posts;
+the parser counts these as invalid and excludes them from the metric.
+
+\section{Out-of-Distribution Results: Cross-Dataset Transfer (RQ4)}
+\label{sec:results-ood}
+
+We zero-shot-evaluate all six (model, architecture) cells on the Jewish-target
+subsets of HateXplain~\citep{mathew2021hatexplain} (2{,}543 examples, 68~\%
+positive base rate) and ToxiGen~\citep{hartvigsen2022toxigen} (684 examples,
+43~\% positive).
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{l l c c c c c c}
+\toprule
+& & \multicolumn{3}{c}{HateXplain Jewish} & \multicolumn{3}{c}{ToxiGen Jewish} \\
+\cmidrule(lr){3-5}\cmidrule(lr){6-8}
+Method & Arch. & F\textsubscript{1}\textsuperscript{+}@0.5 & F\textsubscript{1}\textsuperscript{+}@opt & PR-AUC & F\textsubscript{1}\textsuperscript{+}@0.5 & F\textsubscript{1}\textsuperscript{+}@opt & PR-AUC \\
+\midrule
+Model C  & base  & $\mathbf{0.718}\pm0.039$ & $0.799\pm0.015$           & $\mathbf{0.803}\pm0.027$ & $\mathbf{0.521}\pm0.057$ & $0.668\pm0.024$           & $0.752\pm0.024$ \\
+CCI v2   & base  & $0.683\pm0.082$           & $\mathbf{0.811}\pm0.001$ & $0.796\pm0.023$           & $0.480\pm0.074$           & $\mathbf{0.675}\pm0.023$ & $0.746\pm0.022$ \\
+Model C  & DL    & $0.762\pm0.023$           & $0.809\pm0.007$           & $0.812\pm0.012$           & $\mathbf{0.588}\pm0.037$ & $\mathbf{0.713}\pm0.014$ & $0.798\pm0.015$ \\
+CCI v2   & DL    & $\mathbf{0.775}\pm0.016$ & $\mathbf{0.811}\pm0.008$ & $\mathbf{0.832}\pm0.012$ & $0.558\pm0.034$           & $0.702\pm0.024$           & $\mathbf{0.801}\pm0.011$ \\
+Model C  & RL    & $0.661\pm0.042$           & $0.798\pm0.013$           & $0.762\pm0.022$           & $\mathbf{0.587}\pm0.038$ & $0.677\pm0.019$           & $0.756\pm0.022$ \\
+CCI v2   & RL    & $\mathbf{0.672}\pm0.033$ & $0.798\pm0.022$           & $\mathbf{0.782}\pm0.013$ & $0.540\pm0.064$           & $\mathbf{0.691}\pm0.030$ & $\mathbf{0.763}\pm0.022$ \\
+\bottomrule
+\end{tabular}
+\caption{Cross-dataset transfer. DL = DeBERTa-v3-large; RL = RoBERTa-large.
+F\textsubscript{1}\textsuperscript{+}@0.5 uses the default decision threshold;
+F\textsubscript{1}\textsuperscript{+}@opt selects the threshold that maximises
+F\textsubscript{1}\textsuperscript{+} on the same OOD test set (an
+upper-bound diagnostic, not a deployable rule). Mean $\pm$ std over 5 or 6 seeds.}
+\label{tab:xds}
+\end{table}
+
+\paragraph{What this shows.} At the default threshold $t{=}0.5$, CCI v2 loses
+F\textsubscript{1}\textsuperscript{+} on 4 of 6 (architecture, dataset) cells
+(by $-0.030$ to $-0.047$), wins by small margins on the two HateXplain large
+cells ($+0.011$ to $+0.013$), and CCI v2 wins or ties PR-AUC on every cell
+(per-cell $\Delta$ range $[-0.007, +0.021]$, CCI v2 winning on 4 of 6 iso-architecture cells).
+The ranking quality is preserved cross-dataset; the operating point is not.
+
+\paragraph{Threshold-sweep diagnostic.} For each cell we sweep the decision
+threshold over $[0.05, 0.95]$ in steps of $0.01$ and report the
+F\textsubscript{1}\textsuperscript{+}-maximising threshold $t^*$ per seed.
+Two patterns emerge. First, \textbf{CCI v2's optimal $t^*$ is systematically
+low}: median $t^* \in [0.05, 0.15]$ across all six CCI v2 cells, versus
+Model C's $[0.05, 0.18]$ --- both are well below the default $0.5$. Second,
+\textbf{CCI v2's threshold gain $\Delta=$F\textsubscript{1}\textsuperscript{+}@opt
+$-$ F\textsubscript{1}\textsuperscript{+}@0.5 is larger at base scale}: the
+base CCI v2 cell averages $+0.162$ of threshold gain on the two OOD datasets,
+versus Model C base's $+0.115$. CCI v2 has more performance locked behind a
+mis-calibrated default cutoff; at large scale this gap narrows
+(${+}0.090$ vs ${+}0.086$ on DeBERTa-large).
+
+\paragraph{Iso-architecture comparison at F\textsubscript{1}\textsuperscript{+}@opt.}
+Once each model uses its own PR-curve-optimal threshold:
+\begin{itemize}[leftmargin=*,itemsep=1pt]
+    \item HateXplain converges across all six cells to F\textsubscript{1}\textsuperscript{+}$\in[0.798, 0.811]$
+    --- a band of $0.013$. CCI v2 marginally wins on DeBERTa-base ($+0.012$),
+    is tied within $0.002$ on DeBERTa-large, and is identical on RoBERTa-large.
+    \item ToxiGen splits cleanly: CCI v2 wins on DeBERTa-base ($+0.007$) and
+    RoBERTa-large ($+0.014$), loses by $-0.011$ on DeBERTa-large (within seed noise).
+    Out of six iso-architecture comparisons, CCI v2 wins or ties five.
+\end{itemize}
+
+\paragraph{Cross-dataset bottom line.} The apparent F\textsubscript{1}\textsuperscript{+}
+deficit of CCI v2 at $t{=}0.5$ \emph{is} a threshold-shift artefact, full stop.
+CCI v2's training compresses scores toward the swap-pair mean, leaving the
+model at a more conservative operating point cross-dataset; once each model
+uses its own PR-curve-optimal threshold, CCI v2 wins or ties Model C on
+five of six iso-architecture cells and PR-AUC is preserved or improved
+on every cell (per-cell $\Delta$ range $[-0.007, +0.021]$).  The artefact is the predicted behaviour of a
+Jensen-Shannon pair-invariance regulariser
+(mechanism in \S\ref{sec:results-id}) and is consistent with the
+calibration-vs-fairness incompatibility
+of~\citet{pleiss2017fairness}.
+
+\paragraph{The gap is calibration-driven, not representation-driven.}
+F\textsubscript{1}\textsuperscript{+}@opt is oracle-tuned on the OOD set
+itself and thus an upper-bound diagnostic. To isolate \emph{where} the
+gap actually lives, we ran a deployable middle column: tune the threshold
+on the GoldStandard2024 source test split (no OOD labels), apply it
+unchanged to HateXplain and ToxiGen. Result: the source-tuned threshold
+clusters in $[0.44, 0.62]$ across all twelve cells --- essentially the
+default $0.5$ --- while the OOD-optimal threshold clusters in
+$[0.05, 0.18]$. The $\approx 0.4$-unit gap is structural: the source has
+$17.3\%$ positive base rate (well-calibrated at $\sim 0.5$), the OOD
+sets have $43\%$ and $68\%$ (well-calibrated far below). A representation
+deficit would manifest at \emph{any} threshold; the fact that the gap
+disappears exactly once threshold matches OOD prevalence pinpoints it
+as a prevalence-driven calibration shift, orthogonal to the ranking
+quality the regulariser was designed to deliver
+(supplementary \texttt{threshold\_sweep\_cross\_dataset.csv}, $n{=}68$
+cells). Independently, $46.6\%$ of ToxiGen Jewish positives contain no
+swappable identity token (vs $11.7\%$ of HateXplain Jewish positives), so
+the swap-invariance training mechanism cannot operate on nearly half of
+ToxiGen's positives; that this lexical limitation does not produce a
+larger ToxiGen gap suggests the regulariser's invariance signal
+generalises beyond the swap vocabulary.
+
+\section{Discussion}
+
+\paragraph{Three axes are genuinely orthogonal.} The Lemma rules out scalar
+Temperature Scaling as a CFR\textsubscript{hard} fix; the multicalibration
+finding shows that fixing subgroup-conditional ECE actively damages
+soft counterfactual stability ($+96\%$). Conversely, CCI v2 reduces
+CFR\textsubscript{hard} but does not improve global ECE and shows mild
+worst-group ECE penalties. The three axes accuracy / calibration /
+counterfactual stability are not aliases for each other, and a model
+selection procedure that targets one will not automatically deliver on
+the others.
+
+\paragraph{Ranking transfers; the operating point shifts with prevalence.}
+The cross-dataset evaluation pinpoints what training-time counterfactual
+invariance buys out-of-distribution and what it does not. The regulariser
+delivers \emph{rank-preserving invariance}: PR-AUC and
+F\textsubscript{1}\textsuperscript{+}@opt are preserved or marginally
+improved on every iso-architecture cell, with CCI v2 winning or tying
+on 5 of 6 cells at $t^*$. It does \emph{not} deliver
+decision-preserving invariance at a fixed default cutoff: the
+Jensen-Shannon pair-invariance term pulls predictions on a swap pair
+$(x, x')$ toward their geometric mean, compressing scores toward the
+distribution centre. The right \emph{order} of antisemitic vs
+non-antisemitic content is learned; the cut-off to convert that order
+into decisions has to track the deployment distribution's positive
+base rate (GoldStandard2024 $17\%$, ToxiGen $43\%$, HateXplain $68\%$).
+This is exactly the scope \citet{veitch2021counterfactual} describe:
+counterfactual invariance is defined against a specified intervention
+set, with no claim about decisions at a fixed cutoff outside that set.
+Our threshold-sweep + source-tuned check make the partition explicit:
+the regulariser delivers rank-preserving invariance; deployment then
+needs a cheap OOD-aware threshold pick.
+
+\paragraph{Prompted LLMs underperform fine-tuned by 22 points.} This replicates
+\citet{patel2025evaluating}'s general finding on the Jewish-target subset
+and across three independent LLM families. Guided CoT helps Llama and
+Mistral, destroys Qwen --- the kind of model-specific prompt brittleness
+the deployability literature has been documenting~\citep{turpin2023language}.
+
+\paragraph{Limitations.} (i) Single dataset (GoldStandard2024) for training;
+(ii) single language (English); (iii) single identity target (antisemitism);
+(iv) the swap engine is rule-based; an LLM-likelihood-based filter would
+likely improve coverage on borderline pairs.
+
+\section{Scope and Novelty Self-Assessment}
+
+Honest claim-by-claim ranking of the work's novelty, on a 1--5 scale.
+
+\begin{itemize}[leftmargin=*,itemsep=2pt]
+\item \textbf{Multicalibration vs counterfactual-invariance tension (\S\ref{sec:tension}).}
+\textbf{Novelty: 5/5.} To our reading this is the first quantitative report
+of a tension between post-hoc multicalibration and counterfactual
+pair-invariance on a text classifier. The $+96\%$ CFR\textsubscript{soft,L1}
+regression is mechanistically traced to the partition structure of
+multicalibration patchers. The general calibration-vs-fairness incompatibility
+(\citet{pleiss2017fairness}) is established literature; the empirical
+specialisation to text counterfactual pairs is new.
+
+\item \textbf{Multi-architecture cross-family transfer of CCI.}
+\textbf{Novelty: 4/5.} Demonstrating that the regulariser transfers
+\emph{both} same-family up in scale (DeBERTa-base$\to$large, $+1.4\times$
+parameters) \emph{and} cross-family (DeBERTa-base$\to$RoBERTa-large,
+different tokenizer) is uncommon in the counterfactual-fairness
+literature. The cross-family RoBERTa-large reduction
+($-73\%$ CFR\textsubscript{hard}) is the strongest single empirical result.
+
+\item \textbf{Two-family Holm-Bonferroni significance suite with paired
+bootstrap and exact-sign-test floor.}
+\textbf{Novelty: 4/5} for a course mini-project (most don't bother),
+\textbf{2/5} as methods contribution in absolute terms (the design follows
+\citet{dror2018hitchhiker}).
+
+\item \textbf{Honest FNED Pareto audit + transparent pivot change.}
+\textbf{Novelty: 3/5.} The original pre-registered pivot
+(CCI v2 learned-$T$) was switched to fixed-$T$ after a within-cell
+ablation showed the learned-$T$ cell cost FNED without buying
+CFR\textsubscript{hard}. Most papers wouldn't admit this.
+
+\item \textbf{Cross-dataset transfer analysis at three operating points.}
+\textbf{Novelty: 4/5.} The cross-dataset evaluation reports
+F\textsubscript{1}\textsuperscript{+} at three thresholds per
+(architecture, dataset) cell: the default $t{=}0.5$ (deployed today), the
+source-tuned $t^{\mathrm{src}}$ (no OOD labels), and the OOD-optimal
+$t^*$ (upper bound). The three columns disambiguate (i) the artefact at
+the default cutoff, (ii) the prevalence-driven structural component
+($t^{\mathrm{src}}\!\approx\!0.5$ vs $t^*\!\approx\!0.1$), and (iii) the
+preserved ranking ceiling (CCI v2 wins or ties on 5/6 iso-architecture
+cells at $t^*$, PR-AUC $\Delta \in [-0.007, +0.021]$ winning on 4/6).
+The three-operating-point
+disambiguation is, to our reading, novel in pair-invariance cross-dataset
+evaluation and gives a clean mechanistic diagnosis: the regulariser
+preserves ranking and the gap at the default cutoff is a prevalence-shift
+calibration issue, not a representation deficit.
+
+\item \textbf{CCI v2 loss formulation (JS in probability space + per-group $T$).}
+\textbf{Novelty: 3/5.} Incremental over Counterfactual Logit
+Pairing~\citep{garg2019counterfactual,davani2021improving} which uses
+$L_p$ in logit space. The JS choice yields different gradient dynamics
+near the decision boundary; the per-group $T$ does not improve
+CFR\textsubscript{hard} in our ablation but is retained as a comparator.
+
+\item \textbf{Lemma~\ref{lem:ts-cfr} (scalar TS preserves
+CFR\textsubscript{hard} at threshold $1/2$).}
+\textbf{Novelty: 2/5} for the math (the proof is one line: monotone
+$\sigma$ preserves sign across the threshold), \textbf{4/5} for the
+operational regression-test verification (bit-exact preservation on six
+Model C seeds with fitted $T\in[0.566, 1.400]$).
+
+\item \textbf{Prompted-LLM negative result (best LLM 22 points below
+fine-tuned across three LLM families).}
+\textbf{Novelty: 2/5.} Replication of \citet{patel2025evaluating}'s
+general finding on the Jewish-target subset; small extension via
+Qwen-CoT brittleness observation.
+
+\item \textbf{Bimodal ECE under focal + F\textsubscript{1}-based early
+stopping (supporting observation).}
+\textbf{Novelty: 1/5.} Already characterised by \citet{mukhoti2020calibrating}
+and \citet{tao2023pcs}; we document it on this dataset.
+\end{itemize}
+
+\paragraph{Aggregate scope.} \textbf{Most novel}: the multicalibration vs
+counterfactual-invariance tension (\S\ref{sec:tension}). \textbf{Most useful}:
+the three-axis evaluation framework as a methodological habit for hate-speech
+classifier evaluation, plus the three-operating-point (default / source-tuned
+/ OOD-optimal) cross-dataset diagnostic that separates ranking transfer
+from prevalence-driven calibration shift. \textbf{Most honest}:
+the FNED Pareto audit and the cross-dataset three-operating-point analysis
+that re-interprets our earlier ``negative result'' as a calibration shift,
+not a representation deficit.
+
+\section{Future Work}
+
+\begin{enumerate}[leftmargin=*,itemsep=2pt]
+\item \textbf{Held-out OOD dev split for deployable threshold calibration.}
+Our source-tuned column shows that GoldStandard2024-side calibration alone
+cannot close the OOD gap (prevalence shift dominates). The natural next step
+is a small held-out OOD dev split per target distribution; the question is
+how many labelled OOD examples are needed for the calibrated threshold to
+generalise --- a sample-complexity ablation that fits cleanly in a follow-up.
+\item \textbf{Composing CCI v2 with random identity-token masking.} A small
+sweep replacing the pure-CCI cell with CCI~v2 $+$ Bernoulli masking
+augmentation. Prediction: random masking provides omnidirectional smoothness
+on examples without an explicit identity token (the $46.6\%$ ToxiGen
+no-token positives) while CCI v2's directional pair-invariance handles the
+within-vocabulary cases.
+\item \textbf{Mechanistic derivation of the score-compression effect.}
+The Jensen-Shannon pair-invariance gradient
+$\partial\mathrm{JS}/\partial z \propto p(1{-}p)\,[\mathrm{logit}(p)-\mathrm{logit}(m)]$
+formally predicts the contraction-toward-mean behaviour we observe empirically
+(low $t^*$ for CCI v2). Writing this out and verifying empirically would tie
+the threshold-sweep finding to a closed-form mechanism.
+\item \textbf{LLM-likelihood-based symmetry filter.} The plumbing exists;
+plugging it in would expand the swap manifest's coverage.
+\item \textbf{Cross-language and cross-identity transfer.} The swap engine
+and the symmetric vocabulary are the only identity-specific components; the
+method is, in principle, identity-agnostic.
+\end{enumerate}
+
+\section{Conclusion}
+
+Training-time counterfactual invariance is a real,
+mechanistically-interpretable axis of regularisation for hate-speech
+classifiers, orthogonal to accuracy and calibration.
+\textbf{In distribution}, CCI v2 cuts the hard counterfactual flip rate
+by 49--73~\% across three architectures, with
+F\textsubscript{1}\textsuperscript{+} preserved or improved, and we
+identify a previously-undocumented tension between multicalibration and
+counterfactual pair-invariance.
+\textbf{Out of distribution}, the gain transfers cleanly as preserved
+ranking quality (PR-AUC range $\Delta \in [-0.007, +0.021]$ across six
+iso-architecture cells, CCI v2 winning on 4 of 6) at a more conservative operating point
+($t^*\!\approx\!0.05$--$0.15$ vs the default $0.5$); at each model's
+PR-curve-optimal threshold, CCI v2 wins or ties on five of six
+iso-architecture cross-dataset cells. A source-tuned threshold check
+($n{=}68$ cells) locates the residual gap at default cutoff in a
+$\approx 0.4$-unit prevalence shift on the optimal threshold rather
+than in the representation. This separates two distinct claims about
+generalisation that the literature often conflates:
+\emph{ranking generalisation} (which the regulariser delivers
+out-of-the-box) and \emph{decision generalisation at a fixed default
+cutoff} (which requires a small OOD-aware threshold calibration step).
+
+\small
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}

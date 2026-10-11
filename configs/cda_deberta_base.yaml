@@ -1,0 +1,46 @@
+# CDA baseline: Model C recipe (DeBERTa-v3-base + focal + keyword masking) trained on
+# train + admissible identity-swapped copies as extra labeled rows (label copied from
+# the source). NO consistency loss — isolates "more counterfactual data" from CCI v2's
+# invariance penalty. Swap knobs match cci_v2_* / davani_* so all counterfactual
+# methods see the same admissible-swap distribution.
+defaults:
+  - base
+
+experiment_name: "cda_deberta_base"
+
+model:
+  name: "microsoft/deberta-v3-base"
+  num_labels: 2
+  dropout: 0.1
+  freeze_embeddings: false
+
+training:
+  epochs: 7
+  batch_size: 8
+  learning_rate: 2.0e-5
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  max_grad_norm: 1.0
+  precision: "fp32"   # DeBERTa-v3 disentangled attention overflows in bf16/fp16 (NaN); fp32 is standard for DeBERTa-v3
+  gradient_accumulation_steps: 2  # effective batch size = 8 * 2 = 16
+
+  loss_type: "focal"
+  focal_gamma: 2.0
+  focal_alpha: 0.75
+
+  # CDA: static train-split expansion with admissible swaps (scripts/train.py)
+  cda_augmentation: true
+  cf_swaps_per_token: 3
+  cf_pairs_cap_per_example: 5
+  cf_symmetry_filter: "heuristic"
+
+  patience: 3
+  metric_for_best_model: "macro_f1"
+
+  # Model C's keyword masking stays ON: CDA = Model C + extra counterfactual rows
+  keyword_masking: true
+  keyword_mask_prob: 0.3
+
+evaluation:
+  metrics: ["macro_f1", "precision", "recall", "pr_auc", "ece"]
+  per_keyword: true

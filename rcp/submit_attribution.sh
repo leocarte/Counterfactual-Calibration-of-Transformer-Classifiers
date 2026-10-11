@@ -51,4 +51,4 @@ echo "IG sweep submitted: ${#MODELS[@]} models × ${#SEEDS[@]} seeds = $((${#MOD
 echo "Monitor: watch -n 30 'runai list -p course-ee-559-\$(whoami) | grep ig-'"
 echo ""
 echo "When all Succeeded, run analysis:"
-echo "  python3 analysis/attribution_analysis.py    # writes paper/figures/attribution_shift.pdf"
+echo "  python3 analysis/04_attribution_analysis.py    # writes paper/figures/attribution_shift.pdf"

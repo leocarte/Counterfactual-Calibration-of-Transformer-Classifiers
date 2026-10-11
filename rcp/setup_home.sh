@@ -33,7 +33,7 @@ HOME_CODE="/home/${RCP_USERNAME}/antisemitism-detection"
 
 if [[ ! -d "${HOME_CODE}" ]]; then
   echo "ERROR: ${HOME_CODE} does not exist. Clone the repo there first:" >&2
-  echo "  git clone https://github.com/<your-username>/DeepLearning.git ~/antisemitism-detection" >&2
+  echo "  git clone https://github.com/giacomocase/DeepLearning.git ~/antisemitism-detection" >&2
   exit 1
 fi
 

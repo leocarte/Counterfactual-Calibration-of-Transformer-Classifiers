@@ -58,7 +58,17 @@ class TransformerClassifier(nn.Module):
         input_ids: torch.Tensor,
         attention_mask: torch.Tensor,
         labels: Optional[torch.Tensor] = None,
+        label_mask: Optional[torch.Tensor] = None,
     ) -> dict:
+        """Forward pass; ``label_mask`` marks which rows carry a usable label.
+
+        The mask exists for the semi-supervised setting, where part of the
+        training pool is treated as unlabelled: those rows must still be encoded
+        (CCI's consistency term applies to them) but must not reach the
+        supervised loss. Unlabelled rows keep a dummy label so the one-hot inside
+        FocalLoss stays in range; their per-example loss is computed and then
+        discarded. ``label_mask=None`` reproduces the previous behaviour exactly.
+        """
         outputs = self.model(
             input_ids=input_ids,
             attention_mask=attention_mask,
@@ -71,8 +81,23 @@ class TransformerClassifier(nn.Module):
             # Move loss weights to same device as logits
             if hasattr(self.loss_fn, "weight") and self.loss_fn.weight is not None:
                 self.loss_fn.weight = self.loss_fn.weight.to(logits.device)
-            loss = self.loss_fn(logits, labels)
-            result["loss"] = loss
+
+            if label_mask is None:
+                result["loss"] = self.loss_fn(logits, labels)
+            else:
+                # Average over labelled rows only. Switching reduction rather than
+                # holding a second loss object keeps one source of truth for
+                # gamma/alpha/weights; it is restored even if the loss raises.
+                prev = self.loss_fn.reduction
+                self.loss_fn.reduction = "none"
+                try:
+                    per_example = self.loss_fn(logits, labels)
+                finally:
+                    self.loss_fn.reduction = prev
+                m = label_mask.to(per_example.dtype)
+                # clamp: at small label fractions a batch can be entirely
+                # unlabelled, and 0/0 would poison the gradient with NaN.
+                result["loss"] = (per_example * m).sum() / m.sum().clamp(min=1.0)
 
         return result
 

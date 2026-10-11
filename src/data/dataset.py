@@ -25,6 +25,7 @@ class AntisemitismDataset(Dataset):
         keyword_masking: bool = False,
         keyword_mask_prob: float = 0.3,
         keywords: Optional[list[str]] = None,
+        label_mask: Optional[list[bool]] = None,
     ):
         self.texts = texts
         self.labels = labels
@@ -33,6 +34,15 @@ class AntisemitismDataset(Dataset):
         self.keyword_masking = keyword_masking
         self.keyword_mask_prob = keyword_mask_prob
         self.keywords = keywords or ANTISEMITISM_KEYWORDS
+        # Semi-supervised setting: rows outside the mask are encoded and used by
+        # CCI's consistency term but excluded from the supervised loss. Default
+        # None means fully supervised, and __getitem__ then emits no extra key,
+        # so existing collate paths are untouched.
+        if label_mask is not None and len(label_mask) != len(texts):
+            raise ValueError(
+                f"label_mask has {len(label_mask)} entries for {len(texts)} texts"
+            )
+        self.label_mask = label_mask
 
     def __len__(self) -> int:
         return len(self.texts)
@@ -56,8 +66,13 @@ class AntisemitismDataset(Dataset):
             return_tensors="pt",
         )
 
-        return {
+        item = {
             "input_ids": encoding["input_ids"].squeeze(0),
             "attention_mask": encoding["attention_mask"].squeeze(0),
             "labels": torch.tensor(label, dtype=torch.long),
         }
+        if self.label_mask is not None:
+            item["label_mask"] = torch.tensor(
+                bool(self.label_mask[idx]), dtype=torch.bool
+            )
+        return item
